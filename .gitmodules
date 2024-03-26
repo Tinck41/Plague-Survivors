@@ -1,0 +1,12 @@
+[submodule "vendor/flecs"]
+	path = vendor/flecs
+	url = https://github.com/SanderMertens/flecs
+[submodule "vendor/SFML"]
+	path = vendor/SFML
+	url = https://github.com/SFML/SFML.git
+[submodule "vendor/box2d"]
+	path = vendor/box2d
+	url = https://github.com/erincatto/box2d
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog
