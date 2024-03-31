@@ -31,7 +31,7 @@ void PhysicsSystem::create() {
 		.each([](PhysicsComponent& p, RigidbodyComponent& r, BoxColliderComponent& b, TransformComponent& t) {
 			b2BodyDef bodyDef;
 			bodyDef.type = r.Type == RigidbodyComponent::BodyType::Dynamic ? b2BodyType::b2_dynamicBody : b2BodyType::b2_staticBody;
-			bodyDef.position = { (t.trasnslation.x / 2.f) / 30.f , (t.trasnslation.y  / 2.f) / 30.f };
+			bodyDef.position = { (t.translation.x / 2.f) / 30.f , (t.translation.y  / 2.f) / 30.f };
 			bodyDef.angle = t.rotation;
 			bodyDef.fixedRotation = r.fixedRotation;
 
@@ -57,8 +57,8 @@ void PhysicsSystem::create() {
 		.each([](TransformComponent& t, const RigidbodyComponent& r) {
 			auto body = (b2Body*)r.body;
 			const auto& position = body->GetPosition();
-			t.trasnslation.x = position.x * 2.f * 30.f;
-			t.trasnslation.y = position.y * 2.f * 30.f;
+			t.translation.x = position.x * 2.f * 30.f;
+			t.translation.y = position.y * 2.f * 30.f;
 			t.rotation = body->GetAngle();
 		});
 

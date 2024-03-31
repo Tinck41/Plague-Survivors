@@ -2,6 +2,7 @@
 
 #include "SFML/System/Vector2.hpp"
 #include "ecsModule/components/boxColliderComponent.h"
+#include "ecsModule/components/cameraComponent.h"
 #include "ecsModule/components/inputComponent.h"
 #include "ecsModule/components/playerComponent.h"
 #include "ecsModule/components/rigidbodyComponent.h"
@@ -11,6 +12,7 @@
 #include "ecsModule/systems/inputSystem.h"
 #include "ecsModule/systems/physicsSystem.h"
 #include "ecsModule/systems/timeSystem.h"
+#include "ecsModule/systems/cameraSystem.h"
 #include "spdlog/spdlog.h"
 #include "systems/renderSystem.h"
 #include "box2d/b2_body.h"
@@ -57,13 +59,13 @@ void EcsController::init() {
 	m_world.system<SpriteComponent, TransformComponent>()
 	.kind(Phases::Update)
 	.each([](SpriteComponent& s, const TransformComponent& t) {
-		s.sprite.setPosition({ t.trasnslation.x, t.trasnslation.y });
+		s.sprite.setPosition({ t.translation.x, t.translation.y });
 	});
 
-	auto e = m_world.entity()
+	auto player = m_world.entity("player")
 	.add<PlayerComponent>()
 	.set([](TransformComponent& t, VelocityComponent& v, SpriteComponent& s) {
-		t.trasnslation = { 50.f, 50.f };
+		t.translation = { 50.f, 50.f };
 		s.sprite.setSize({ 50.f, 50.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Green;
@@ -75,9 +77,12 @@ void EcsController::init() {
 		r.Type = RigidbodyComponent::BodyType::Dynamic;
 	});
 
+	auto camera = m_world.get_ref<CameraComponent>();
+	camera->target = player;
+
 	m_world.entity()
 	.set([](TransformComponent& t, SpriteComponent& s) {
-		t.trasnslation = { 300.f, 300.f };
+		t.translation = { 300.f, 300.f };
 		s.sprite.setSize({ 150.f, 150.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Red;
@@ -87,9 +92,9 @@ void EcsController::init() {
 		b.size = { 150.f, 150.f };
 		r.Type = RigidbodyComponent::BodyType::Static;
 	});
-	m_world.entity()
+	m_world.entity("obstacle")
 	.set([](TransformComponent& t, SpriteComponent& s) {
-		t.trasnslation = { 600.f, 50.f };
+		t.translation = { 600.f, 50.f };
 		s.sprite.setSize({ 50.f, 50.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Red;
@@ -128,6 +133,7 @@ void EcsController::initSystems() {
 	TimeSystem::create();
 	PhysicsSystem::create();
 	InputSystem::create();
+	CameraSystem::create();
 }
 
 flecs::world& EcsController::getWorld() {

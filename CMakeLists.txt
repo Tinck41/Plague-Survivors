@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Plague-Survivors LANGUAGES CXX)
+project(Plague-Survivors LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDART 20)
 set(SFML_STATIC_LIBRARIES TRUE)
@@ -31,6 +31,7 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/components/rigidbodyComponent.h
 	src/ecsModule/components/boxColliderComponent.h
 	src/ecsModule/components/inputComponent.h
+	src/ecsModule/components/cameraComponent.h
 	src/ecsModule/types.h
 	src/ecsModule/ecsController.h
 	src/ecsModule/ecsController.cpp
@@ -42,6 +43,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/systems/physicsSystem.cpp
 	src/ecsModule/systems/inputSystem.h
 	src/ecsModule/systems/inputSystem.cpp
+	src/ecsModule/systems/cameraSystem.h
+	src/ecsModule/systems/cameraSystem.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)

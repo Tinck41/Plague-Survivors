@@ -43,7 +43,7 @@ void RenderSystem::create() {
 			}
 		});
 
-	world.set<RendererComponent>(
-		{ std::make_unique<sf::RenderWindow>(sf::VideoMode({ 600, 600 }), "Plague: Survivors") }
-	);
+	world.set([] (RendererComponent& r) {
+		r.renderer = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 600, 600 }), "Plague: Survivors");
+	});
 }
