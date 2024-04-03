@@ -112,7 +112,7 @@ namespace ps::ecsModule {
 	struct KeyState {
 		bool pressed = false;
 		bool remain = false;
-		bool release = false;
+		bool released = false;
 	};
 
 	struct MouseState{

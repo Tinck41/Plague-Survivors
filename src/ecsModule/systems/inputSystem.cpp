@@ -18,18 +18,21 @@ void InputSystem::create() {
 		.term_at(2).singleton()
 		.each([](RendererComponent& r, InputComponent& i) {
 			for (auto& [_, state] : i.keys) {
-				state.release = false;
+				state.pressed = false;
+				state.released = false;
 			}
 
 			sf::Event event;
 			if (r.renderer->pollEvent(event)) {
-				if (event.type == sf::Event::Resized) {
-					//r.renderer->setSize({ event.size.width, event.size.height });
+				if (event.type == sf::Event::Closed) {
+					r.renderer->close();
+				} else if (event.type == sf::Event::Resized) {
+					auto view = r.renderer->getView();
+					view.setSize({ static_cast<float>(event.size.width), static_cast<float>(event.size.height) });
+					r.renderer->setView(view);
 				} else if (event.type == sf::Event::KeyPressed) {
 					auto key = SfmlKeyToPsKey(event.key.code);
-					if (i.keys[key].pressed) {
-						i.keys[key].pressed = false;
-					} else if (!i.keys[key].remain) {
+					if (!i.keys[key].remain) {
 						i.keys[key].pressed = true;
 						i.keys[key].remain = true;
 					}
@@ -37,7 +40,7 @@ void InputSystem::create() {
 					auto key = SfmlKeyToPsKey(event.key.code);
 					i.keys[key].pressed = false;
 					i.keys[key].remain = false;
-					i.keys[key].release = true;
+					i.keys[key].released = true;
 				}
 			};
 		});

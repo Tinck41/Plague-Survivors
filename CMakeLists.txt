@@ -32,6 +32,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/components/boxColliderComponent.h
 	src/ecsModule/components/inputComponent.h
 	src/ecsModule/components/cameraComponent.h
+	src/ecsModule/components/stateComponent.h
+	src/ecsModule/components/dashComponent.h
 	src/ecsModule/types.h
 	src/ecsModule/ecsController.h
 	src/ecsModule/ecsController.cpp

@@ -18,4 +18,10 @@ namespace ps::ecsModule {
 		flecs::entity newTarget;
 		eTransitionType transitionType;
 	};
+
+	struct CameraShakingComponent {
+		float duration = 1.f;
+		sf::Vector2f horizontalOffset { 0.f, 0.f };
+		sf::Vector2f verticalOffset { 0.f, 0.f };
+	};
 }

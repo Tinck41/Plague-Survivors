@@ -4,6 +4,7 @@
 #include "ecsModule/components/cameraComponent.h"
 #include "ecsModule/components/inputComponent.h"
 #include "ecsModule/components/rendererComponent.h"
+#include "ecsModule/components/timeComponent.h"
 #include "ecsModule/components/transformComponent.h"
 #include "ecsModule/components/velocityComponent.h"
 #include "ecsModule/ecsController.h"
@@ -22,6 +23,21 @@ void CameraSystem::create() {
 	camera.set([] (VelocityComponent& v) {
 		v.velocity = { 5.f, 5.f };
 	});
+
+	world.system<CameraComponent, CameraShakingComponent>()
+		.term_at(1).singleton()
+		.kind(Phases::Update)
+		.each([](flecs::iter& it, size_t size, CameraComponent& c, CameraShakingComponent& s) {
+			if (s.duration > 0.f) {
+				c.center.x += s.horizontalOffset.x;
+				c.center.y += s.verticalOffset.y;
+				s.duration -= it.delta_time();
+				std::swap(s.horizontalOffset.x, s.horizontalOffset.y);
+				std::swap(s.verticalOffset.x, s.verticalOffset.y);
+			} else {
+				it.entity(size).remove<CameraShakingComponent>();
+			}
+		});
 
 	world.system<CameraComponent, CameraTransitionComponent>()
 		.term_at(1).singleton()
@@ -62,7 +78,7 @@ void CameraSystem::create() {
 		.each([](flecs::iter& it, size_t, InputComponent& i) {
 			const auto& world = it.world();
 			auto camera = world.singleton<CameraComponent>();
-			if (i.keys[Key::C].release) {
+			if (i.keys[Key::C].released) {
 				CameraTransitionComponent t;
 				const auto target = camera.get<CameraComponent>()->target;
 				const auto player = world.lookup("player");
@@ -70,7 +86,7 @@ void CameraSystem::create() {
 				t.newTarget = target == player ? obstacle : player;
 				t.transitionType = CameraTransitionComponent::eTransitionType::SMOOTH;
 				camera.set(t);
-			} else if (i.keys[Key::V].release) {
+			} else if (i.keys[Key::V].released) {
 				CameraTransitionComponent t;
 				const auto target = camera.get<CameraComponent>()->target;
 				const auto player = world.lookup("player");
