@@ -1,4 +1,7 @@
+/*.pdb
+/*.exe
+/*.dll
 /build/*
-compile_commands.json
 /.cache/*
+compile_commands.json
 Plague-Survivors
