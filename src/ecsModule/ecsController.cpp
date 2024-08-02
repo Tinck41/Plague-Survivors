@@ -15,6 +15,7 @@
 #include "ecsModule/systems/physicsSystem.h"
 #include "ecsModule/systems/timeSystem.h"
 #include "ecsModule/systems/cameraSystem.h"
+#include "ecsModule/systems/ui/uiSystem.h"
 #include "flecs/addons/cpp/c_types.hpp"
 #include "systems/renderSystem.h"
 #include "box2d/b2_body.h"
@@ -193,6 +194,7 @@ void EcsController::initSystems() {
 	PhysicsSystem::create();
 	InputSystem::create();
 	CameraSystem::create();
+	ui::UiSystem::create();
 }
 
 flecs::world& EcsController::getWorld() {
