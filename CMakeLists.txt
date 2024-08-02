@@ -34,6 +34,12 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/components/cameraComponent.h
 	src/ecsModule/components/stateComponent.h
 	src/ecsModule/components/dashComponent.h
+	src/ecsModule/components/ui/imageComponent.h
+	src/ecsModule/components/ui/styleComponent.h
+	src/ecsModule/components/ui/nodeComponent.h
+	src/ecsModule/components/ui/nodeBundle.h
+	src/ecsModule/components/ui/buttonBundle.h
+	src/ecsModule/components/ui/textBundle.h
 	src/ecsModule/types.h
 	src/ecsModule/ecsController.h
 	src/ecsModule/ecsController.cpp
@@ -47,6 +53,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/systems/inputSystem.cpp
 	src/ecsModule/systems/cameraSystem.h
 	src/ecsModule/systems/cameraSystem.cpp
+	src/ecsModule/systems/ui/uiSystem.h
+	src/ecsModule/systems/ui/uiSystem.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
