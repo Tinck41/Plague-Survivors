@@ -11,11 +11,9 @@ void TimeSystem::create() {
 	auto& world = EcsControllerInstance::getInstance()->getWorld();
 
 	world.system<TimeComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(flecs::OnStore)
 		.each([](TimeComponent& t) {
 			t.deltaTime = t.deltaClock.restart().asSeconds();
 		});
-
-	world.set<TimeComponent>({});
 }

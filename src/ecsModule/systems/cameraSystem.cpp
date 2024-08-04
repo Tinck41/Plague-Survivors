@@ -16,16 +16,8 @@ using namespace ecsModule;
 void CameraSystem::create() {
 	auto& world = EcsControllerInstance::getInstance()->getWorld();
 
-	world.component<CameraComponent>().add(flecs::With, world.component<VelocityComponent>());
-
-	auto camera = world.entity<CameraComponent>();
-	camera.set<CameraComponent>({});
-	camera.set([] (VelocityComponent& v) {
-		v.velocity = { 5.f, 5.f };
-	});
-
 	world.system<CameraComponent, CameraShakingComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](flecs::iter& it, size_t size, CameraComponent& c, CameraShakingComponent& s) {
 			if (s.duration > 0.f) {
@@ -40,7 +32,7 @@ void CameraSystem::create() {
 		});
 
 	world.system<CameraComponent, CameraTransitionComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](flecs::iter& it, size_t size, CameraComponent& c, CameraTransitionComponent& t) {
 			c.target = t.newTarget;
@@ -55,8 +47,8 @@ void CameraSystem::create() {
 		});
 
 	world.system<CameraComponent, RendererComponent>()
+		.term_at(0).singleton()
 		.term_at(1).singleton()
-		.term_at(2).singleton()
 		.kind(Phases::Update)
 		.each([](flecs::iter& it, size_t size, CameraComponent& c, RendererComponent& r) {
 			const auto targetTransform = c.target.get<TransformComponent>();
@@ -73,7 +65,7 @@ void CameraSystem::create() {
 
 	// Example
 	world.system<InputComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(flecs::OnUpdate)
 		.each([](flecs::iter& it, size_t, InputComponent& i) {
 			const auto& world = it.world();

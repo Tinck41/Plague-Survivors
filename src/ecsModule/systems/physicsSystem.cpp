@@ -18,15 +18,15 @@ void PhysicsSystem::create() {
 	auto& world = EcsControllerInstance::getInstance()->getWorld();
 
 	world.system<PhysicsComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(flecs::OnUpdate)
 		.each([](flecs::iter& it, size_t, PhysicsComponent& p) {
 			p.world->Step(it.delta_time(), p.velocityInterations, p.positionInterations);
 		});
 
 	world.observer<PhysicsComponent, RigidbodyComponent, BoxColliderComponent, TransformComponent>()
-		.term_at(1).singleton()
-		.term_at(2).filter()
+		.term_at(0).singleton()
+		.term_at(1).filter()
 		.event(flecs::OnSet)
 		.each([](PhysicsComponent& p, RigidbodyComponent& r, BoxColliderComponent& b, TransformComponent& t) {
 			b2BodyDef bodyDef;
@@ -61,6 +61,4 @@ void PhysicsSystem::create() {
 			t.translation.y = position.y * 2.f * 30.f;
 			t.rotation = body->GetAngle();
 		});
-
-	world.set<PhysicsComponent>({});
 }
