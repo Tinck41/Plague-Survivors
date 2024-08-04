@@ -40,7 +40,7 @@ void UiSystem::create() {
 
 	// propably call draw twice on same node with two NodeComponent
 	world.system<RendererComponent, NodeComponent>()
-		.term_at(1).singleton()
+		.term_at(0).singleton()
 		.kind(Phases::Render)
 		.each([](flecs::iter& it, size_t size, RendererComponent& r, NodeComponent) {
 			auto entity = it.entity(size);
@@ -48,19 +48,29 @@ void UiSystem::create() {
 		});
 
 	// create ui entities
+    const auto windowSize = [&]() {
+        const auto windowSize = world.get<RendererComponent>()->renderer->getSize();
+        return sf::Vector2f { static_cast<float>(windowSize.x), static_cast<float>(windowSize.y) };
+    }();
 	const auto canvas = world.entity()
 		.is_a<NodeBundle>()
-		.set([windowSize = world.get<RendererComponent>()->renderer->getSize()](StyleComponent& style) {
-			style.size = { static_cast<float>(windowSize.x), static_cast<float>(windowSize.y) };
+		.set(StyleComponent {
+			.size = windowSize,
+            .backgroundColor = sf::Color::Blue,
+            .shape = sf::RectangleShape{ windowSize }
 		});
 
-	auto button = world.entity()
-		.child_of(canvas)
-		.is_a<ButtonBundle>()
-		.set([](StyleComponent& style) {
-			style.size = { 60.f, 20.f };
-			style.backgroundColor = sf::Color::Cyan;
-		});
+    auto button = world.entity()
+        .child_of(canvas)
+        .is_a<ButtonBundle>()
+        .set(StyleComponent {
+            .size = { 60.f, 600.f },
+            .backgroundColor = sf::Color::Cyan,
+            .shape = sf::RectangleShape{}
+        })
+        .set(TransformComponent {
+            .translation = {-120.f, 0.f }
+        });
 }
 
 void UiSystem::drawCall(flecs::entity entity, RendererComponent& renderer) {

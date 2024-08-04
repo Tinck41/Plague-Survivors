@@ -11,6 +11,10 @@
 #include "ecsModule/components/spriteComponent.h"
 #include "ecsModule/components/velocityComponent.h"
 #include "ecsModule/components/transformComponent.h"
+#include "ecsModule/components/rendererComponent.h"
+#include "ecsModule/components/timeComponent.h"
+#include "ecsModule/components/cameraComponent.h"
+#include "ecsModule/components/physicsComponent.h"
 #include "ecsModule/systems/inputSystem.h"
 #include "ecsModule/systems/physicsSystem.h"
 #include "ecsModule/systems/timeSystem.h"
@@ -29,14 +33,15 @@ std::unique_ptr<EcsController> EcsController::create() {
 }
 
 void EcsController::init() {
+    initSingletons();
 	initSystemPhases();
 	initSystems();
 
 	m_world.system<InputComponent, VelocityComponent, PlayerComponent>()
 	.with<HandleInputState>()
 	.kind(flecs::OnUpdate)
-	.term_at(1).singleton()
-	.each([](flecs::entity entity, InputComponent& i, VelocityComponent& v, const PlayerComponent& p) {
+	.term_at(0).singleton()
+	.each([this](flecs::entity entity, InputComponent& i, VelocityComponent& v, const PlayerComponent& p) {
 		sf::Vector2f direction { 0.f, 0.f };
 		if (i.keys[Key::A].remain) {
 			direction.x = -1.f;
@@ -87,10 +92,10 @@ void EcsController::init() {
 			entity.remove<DashState>();
 
 			auto camera = it.world().singleton<CameraComponent>();
-			camera.set([](CameraShakingComponent& s) {
-				s.duration = 0.1f;
-				s.verticalOffset = { -10.f, 10.f };
-				s.horizontalOffset = { -10.f, 10.f };
+			camera.set(CameraShakingComponent {
+				.duration = 0.1f,
+                .horizontalOffset = { -10.f, 10.f },
+				.verticalOffset = { -10.f, 10.f }
 			});
 
 			auto v = entity.get_ref<VelocityComponent>();
@@ -124,15 +129,15 @@ void EcsController::init() {
 	auto player = m_world.entity("player")
 	.add<PlayerComponent>()
 	.add<HandleInputState>()
-	.set([](TransformComponent& t, VelocityComponent& v, SpriteComponent& s) {
-		t.translation = { 50.f, 50.f };
+	.insert([](TransformComponent& t, VelocityComponent& v, SpriteComponent& s) {
+		t.translation = { 0.f, 0.f };
 		s.sprite.setSize({ 50.f, 50.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Green;
 		s.sprite.setFillColor(s.color);
 		v.velocity = { 300.f, 300.f };
 	})
-	.set([](RigidbodyComponent& r, BoxColliderComponent& b) {
+	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
 		b.size = { 50.f, 50.f };
 		r.Type = RigidbodyComponent::BodyType::Dynamic;
 	});
@@ -141,29 +146,48 @@ void EcsController::init() {
 	camera->target = player;
 
 	m_world.entity()
-	.set([](TransformComponent& t, SpriteComponent& s) {
+	.insert([](TransformComponent& t, SpriteComponent& s) {
 		t.translation = { 300.f, 300.f };
 		s.sprite.setSize({ 150.f, 150.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Red;
 		s.sprite.setFillColor(s.color);
 	})
-	.set([](RigidbodyComponent& r, BoxColliderComponent& b) {
+	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
 		b.size = { 150.f, 150.f };
 		r.Type = RigidbodyComponent::BodyType::Static;
 	});
 	m_world.entity("obstacle")
-	.set([](TransformComponent& t, SpriteComponent& s) {
+	.insert([](TransformComponent& t, SpriteComponent& s) {
 		t.translation = { 600.f, 50.f };
 		s.sprite.setSize({ 50.f, 50.f });
 		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
 		s.color = sf::Color::Red;
 		s.sprite.setFillColor(s.color);
 	})
-	.set([](RigidbodyComponent& r, BoxColliderComponent& b) {
+	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
 		b.size = { 50.f, 50.f };
 		r.Type = RigidbodyComponent::BodyType::Static;
 	});
+}
+
+void EcsController::initSingletons() {
+    m_world.set<RendererComponent>({
+         .renderer = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 600, 600 }), "Plague: Survivors")
+    });
+
+    m_world.set<InputComponent>({});
+
+    m_world.set<TimeComponent>({});
+
+    m_world.set<PhysicsComponent>({});
+
+    m_world.component<CameraComponent>().add(flecs::With, m_world.component<VelocityComponent>());
+    auto camera = m_world.entity<CameraComponent>();
+    camera.set<CameraComponent>({});
+    camera.set(VelocityComponent {
+            .velocity = { 5.f, 5.f }
+    });
 }
 
 void EcsController::initSystemPhases() {

@@ -14,8 +14,8 @@ void InputSystem::create() {
 
 	world.system<RendererComponent, InputComponent>()
 		.kind(Phases::HandleInput)
+		.term_at(0).singleton()
 		.term_at(1).singleton()
-		.term_at(2).singleton()
 		.each([](RendererComponent& r, InputComponent& i) {
 			for (auto& [_, state] : i.keys) {
 				state.pressed = false;
@@ -44,8 +44,6 @@ void InputSystem::create() {
 				}
 			};
 		});
-
-	world.set<InputComponent>({});
 }
 
 Key InputSystem::SfmlKeyToPsKey(sf::Keyboard::Key key) {

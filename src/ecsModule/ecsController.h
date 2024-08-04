@@ -16,6 +16,7 @@ namespace ps::ecsModule {
 	private:
 		EcsController() = default;
 
+        void initSingletons();
 		void initSystemPhases();
 		void initSystems();
 
