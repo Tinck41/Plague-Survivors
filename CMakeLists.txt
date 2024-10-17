@@ -8,7 +8,6 @@ set(BOX2D_BUILD_UNIT_TESTS FALSE)
 set(BOX2D_BUILD_TESTBED FALSE)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SFML)
-add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/flecs)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/box2d)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/spdlog)
 
@@ -21,44 +20,20 @@ add_executable(${PROJECT_NAME}
 	src/main.cpp
 	src/application.h
 	src/application.cpp
-	src/ecsModule/components/transformComponent.h
-	src/ecsModule/components/spriteComponent.h
-	src/ecsModule/components/velocityComponent.h
-	src/ecsModule/components/playerComponent.h
-	src/ecsModule/components/rendererComponent.h
-	src/ecsModule/components/timeComponent.h
-	src/ecsModule/components/physicsComponent.h
-	src/ecsModule/components/rigidbodyComponent.h
-	src/ecsModule/components/boxColliderComponent.h
-	src/ecsModule/components/inputComponent.h
-	src/ecsModule/components/cameraComponent.h
-	src/ecsModule/components/stateComponent.h
-	src/ecsModule/components/dashComponent.h
-	src/ecsModule/components/ui/imageComponent.h
-	src/ecsModule/components/ui/styleComponent.h
-	src/ecsModule/components/ui/nodeComponent.h
-	src/ecsModule/components/ui/nodeBundle.h
-	src/ecsModule/components/ui/buttonBundle.h
-	src/ecsModule/components/ui/textBundle.h
-	src/ecsModule/types.h
-	src/ecsModule/ecsController.h
-	src/ecsModule/ecsController.cpp
-	src/ecsModule/systems/renderSystem.h
-	src/ecsModule/systems/renderSystem.cpp
-	src/ecsModule/systems/timeSystem.h
-	src/ecsModule/systems/timeSystem.cpp
-	src/ecsModule/systems/physicsSystem.h
-	src/ecsModule/systems/physicsSystem.cpp
-	src/ecsModule/systems/inputSystem.h
-	src/ecsModule/systems/inputSystem.cpp
-	src/ecsModule/systems/cameraSystem.h
-	src/ecsModule/systems/cameraSystem.cpp
-	src/ecsModule/systems/ui/uiSystem.h
-	src/ecsModule/systems/ui/uiSystem.cpp
+	src/core/gameObject.h
+	src/core/gameObject.cpp
+	src/core/componentHolder.h
+	src/core/componentHolder.cpp
+	src/core/relationshipHolder.h
+	src/core/relationshipHolder.cpp
+	src/core/componentBase.h
+	src/core/componentBase.cpp
+	src/core/sceneBase.h
+	src/core/sceneController.h
+	src/core/sceneController.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
-target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)
 target_link_libraries(${PROJECT_NAME} PRIVATE box2d)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
 

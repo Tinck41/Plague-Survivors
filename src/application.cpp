@@ -1,40 +1,28 @@
 #include "application.h"
 
 #include "SFML/Graphics.hpp"
-#include "ecsModule/components/physicsComponent.h"
-#include "ecsModule/components/rendererComponent.h"
-#include "ecsModule/components/timeComponent.h"
-#include "ecsModule/ecsController.h"
+#include "core/gameObject.h"
+#include "core/sceneController.h"
 
 using namespace ps;
 using namespace core;
 
-std::unique_ptr<Application> Application::create() {
-	return std::unique_ptr<Application>(new Application);
-}
-
 Application::Application() {
+	m_window          = std::make_unique<sf::RenderWindow>();
+	m_sceneController = std::make_unique<SceneController>();
 }
 
 void Application::init() {
-	ecsModule::EcsControllerInstance::init(ecsModule::EcsController::create());
-	ecsModule::EcsControllerInstance::getInstance()->init();
 }
 
 void Application::run() {
-	auto& world = ecsModule::EcsControllerInstance::getInstance()->getWorld(); 
+	sf::Clock deltaClock;
 
-	while(world.get<ecsModule::RendererComponent>()->renderer->isOpen()) {
-		world.progress(world.get<ecsModule::TimeComponent>()->deltaTime);
+	while (m_window->isOpen()) {
+		m_sceneController->update(deltaClock.restart().asSeconds());
+		m_sceneController->render(m_window.get());
 	}
 }
 
 void Application::shutdown() {
-	auto& world = ecsModule::EcsControllerInstance::getInstance()->getWorld(); 
-
-	world.remove<ecsModule::RendererComponent>();
-	world.remove<ecsModule::PhysicsComponent>();
-	world.remove<ecsModule::TimeComponent>();
-
-	ecsModule::EcsControllerInstance::shutdown();
 }
