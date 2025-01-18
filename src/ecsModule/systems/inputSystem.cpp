@@ -21,9 +21,14 @@ void InputSystem::create() {
 				state.pressed = false;
 				state.released = false;
 			}
+            i.mouse.left.pressed = false;
+            i.mouse.left.released = false;
+            i.mouse.right.pressed = false;
+            i.mouse.right.released = false;
+            i.mouse.moved = false;
 
 			sf::Event event;
-			if (r.renderer->pollEvent(event)) {
+			while (r.renderer->pollEvent(event)) {
 				if (event.type == sf::Event::Closed) {
 					r.renderer->close();
 				} else if (event.type == sf::Event::Resized) {
@@ -41,7 +46,38 @@ void InputSystem::create() {
 					i.keys[key].pressed = false;
 					i.keys[key].remain = false;
 					i.keys[key].released = true;
-				}
+				} else if (event.type == sf::Event::MouseMoved) {
+                    const auto center = r.renderer->getView().getCenter();
+                    const auto halfSize = r.renderer->getView().getSize() / 2.f;
+                    const auto offset = center - halfSize;
+                    const auto newPos = sf::Vector2f{ static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y) } + offset;
+                    if (newPos != i.mouse.position) {
+                        i.mouse.position = newPos;
+                        i.mouse.moved = true;
+                    }
+                } else if (event.type == sf::Event::MouseButtonPressed) {
+                    if (event.mouseButton.button == sf::Mouse::Button::Left) {
+                        if (!i.mouse.left.remain) {
+                            i.mouse.left.pressed = true;
+                            i.mouse.left.remain = true;
+                        }
+                    } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
+                        if (!i.mouse.right.remain) {
+                            i.mouse.right.pressed = true;
+                            i.mouse.right.remain = true;
+                        }
+                    }
+                } else if (event.type == sf::Event::MouseButtonReleased) {
+                   if (event.mouseButton.button == sf::Mouse::Button::Left) {
+                       i.mouse.left.pressed = false;
+                       i.mouse.left.remain = false;
+                       i.mouse.left.released = true;
+                   } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
+                       i.mouse.right.pressed = false;
+                       i.mouse.right.remain = false;
+                       i.mouse.right.released = true;
+                   }
+                }
 			};
 		});
 }
