@@ -119,6 +119,7 @@ namespace ps::ecsModule {
 		KeyState left;
 		KeyState right;
 		sf::Vector2f position;
+        bool moved = false;
 	};
 
 	struct InputComponent {

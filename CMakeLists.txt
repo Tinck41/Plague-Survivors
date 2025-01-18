@@ -55,6 +55,7 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/systems/cameraSystem.cpp
 	src/ecsModule/systems/ui/uiSystem.h
 	src/ecsModule/systems/ui/uiSystem.cpp
+	src/ecsModule/components/ui/interactionComponent.h
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
