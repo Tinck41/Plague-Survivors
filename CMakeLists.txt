@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.28)
 
 project(Plague-Survivors LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDART 20)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(SFML_STATIC_LIBRARIES TRUE)
 set(BOX2D_BUILD_UNIT_TESTS FALSE)
 set(BOX2D_BUILD_TESTBED FALSE)
@@ -56,6 +58,7 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/systems/ui/uiSystem.h
 	src/ecsModule/systems/ui/uiSystem.cpp
 	src/ecsModule/components/ui/interactionComponent.h
+	src/ecsModule/components/ui/interactionStorageComponent.h
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
@@ -65,6 +68,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )
+
+#set_target_properties(${PROJECT_NAME} PROPERTIES XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++${CMAKE_CXX_STANDARD}" )
 
 if(WIN32)
 	add_custom_command(
