@@ -12,7 +12,7 @@ namespace ps::core {
 		void run();
 		void shutdown();
 	private:
-		Application();
+		Application() = default;
 
 		void processInput();
 		void update();

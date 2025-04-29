@@ -23,42 +23,33 @@ add_executable(${PROJECT_NAME}
 	src/main.cpp
 	src/application.h
 	src/application.cpp
-	src/ecsModule/components/transformComponent.h
-	src/ecsModule/components/spriteComponent.h
-	src/ecsModule/components/velocityComponent.h
-	src/ecsModule/components/playerComponent.h
-	src/ecsModule/components/rendererComponent.h
-	src/ecsModule/components/timeComponent.h
-	src/ecsModule/components/physicsComponent.h
-	src/ecsModule/components/rigidbodyComponent.h
-	src/ecsModule/components/boxColliderComponent.h
-	src/ecsModule/components/inputComponent.h
-	src/ecsModule/components/cameraComponent.h
-	src/ecsModule/components/stateComponent.h
-	src/ecsModule/components/dashComponent.h
-	src/ecsModule/components/ui/imageComponent.h
-	src/ecsModule/components/ui/styleComponent.h
-	src/ecsModule/components/ui/nodeComponent.h
-	src/ecsModule/components/ui/nodeBundle.h
-	src/ecsModule/components/ui/buttonBundle.h
-	src/ecsModule/components/ui/textBundle.h
-	src/ecsModule/types.h
+	src/resourceManager.h
+	src/resourceManager.cpp
+	src/ecsModule/common.h
 	src/ecsModule/ecsController.h
 	src/ecsModule/ecsController.cpp
-	src/ecsModule/systems/renderSystem.h
-	src/ecsModule/systems/renderSystem.cpp
-	src/ecsModule/systems/timeSystem.h
-	src/ecsModule/systems/timeSystem.cpp
-	src/ecsModule/systems/physicsSystem.h
-	src/ecsModule/systems/physicsSystem.cpp
-	src/ecsModule/systems/inputSystem.h
-	src/ecsModule/systems/inputSystem.cpp
-	src/ecsModule/systems/cameraSystem.h
-	src/ecsModule/systems/cameraSystem.cpp
-	src/ecsModule/systems/ui/uiSystem.h
-	src/ecsModule/systems/ui/uiSystem.cpp
-	src/ecsModule/components/ui/interactionComponent.h
-	src/ecsModule/components/ui/interactionStorageComponent.h
+	src/ecsModule/uiModule/module.h
+	src/ecsModule/uiModule/module.cpp
+	src/ecsModule/physicsModule/module.h
+	src/ecsModule/physicsModule/module.cpp
+	src/ecsModule/timeModule/module.h
+	src/ecsModule/timeModule/module.cpp
+	src/ecsModule/cameraModule/module.h
+	src/ecsModule/cameraModule/module.cpp
+	src/ecsModule/inputModule/module.h
+	src/ecsModule/inputModule/module.cpp
+	src/ecsModule/spriteModule/module.h
+	src/ecsModule/spriteModule/module.cpp
+	src/ecsModule/playerModule/module.h
+	src/ecsModule/playerModule/module.cpp
+	src/ecsModule/transformModule/module.h
+	src/ecsModule/transformModule/module.cpp
+	src/ecsModule/appModule/module.h
+	src/ecsModule/appModule/module.cpp
+	src/ecsModule/sceneModule/module.h
+	src/ecsModule/sceneModule/module.cpp
+	src/ecsModule/renderModule/module.h
+	src/ecsModule/renderModule/module.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
