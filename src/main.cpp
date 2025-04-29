@@ -1,96 +1,41 @@
-#include "application.h"
-//#include "SFML/Graphics.hpp"
-//#include "flecs.h"
-//
-//struct Position {
-//	float x, y;
-//};
-//
-//struct Velocity {
-//	sf::Vector2f vel;
-//};
-//
-//struct Player {
-//	sf::RectangleShape someShape{};
-//};
-//
-//int main()
-//{
-//	flecs::world ecs;
-//
-//	auto window = sf::RenderWindow(sf::VideoMode({800, 600}), "Plague: Survivors");
-//	window.setFramerateLimit(144);
-//
-//	auto velocitySys = ecs.system<Position, const Velocity>()
-//	.each([](flecs::iter& it, size_t, Position& p, const Velocity& v) {
-//		sf::Vector2f direction { 0.f, 0.f };
-//		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
-//			direction.x = -1.f;
-//		}
-//		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) {
-//			direction.x = 1.f;
-//		}
-//		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W)) {
-//			direction.y = -1.f;
-//		}
-//		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S)) {
-//			direction.y = 1.f;
-//		}
-//		if (direction.x != 0.f || direction.y != 0.f) {
-//			const auto normalized = direction.normalized();
-//			p.x += normalized.x * v.vel.x * it.delta_time();
-//			p.y += normalized.y * v.vel.y * it.delta_time();
-//		}
-//	});
-//	
-//	auto positionSys = ecs.system<Player, const Position>()
-//	.each([](Player& pl, const Position& pos) {
-//		pl.someShape.setPosition({pos.x, pos.y});
-//	});
-//	
-//	flecs::system playerSys = ecs.system<Player>()
-//	.each([&window](Player& p) {
-//		window.draw(p.someShape);
-//	});
-//	auto e = ecs.entity()
-//	.set([](Position& p, Velocity& v, Player& pl) {
-//		p = {10, 10};
-//		v.vel = {500, 500};
-//		pl.someShape.setSize({50, 50});
-//		pl.someShape.setFillColor(sf::Color::White);
-//	});
-//
-//	sf::RectangleShape shape{};
-//	shape.setSize({100, 100});
-//	shape.setPosition({100, 100});
-//	shape.setFillColor(sf::Color::White);
-//
-//	sf::Clock deltaClock;
-//	float deltaTime = 0.f;
-//
-//	while(ecs.progress(deltaTime) && window.isOpen()) {
-//		for (auto event = sf::Event{}; window.pollEvent(event);)
-//		{
-//			if (event.type == sf::Event::Closed)
-//			{
-//				window.close();
-//			}
-//		}
-//		deltaTime = deltaClock.restart().asSeconds();
-//		window.clear();
-//
-//		velocitySys.run();
-//		positionSys.run();
-//		playerSys.run();
-//
-//		window.draw(shape);
-//
-//		window.display();
-//	};
+#include "ecsModule/renderModule/module.h"
+#include "ecsModule/uiModule/module.h"
+#include "ecsModule/cameraModule/module.h"
+#include "ecsModule/physicsModule/module.h"
+#include "ecsModule/timeModule/module.h"
+#include "ecsModule/inputModule/module.h"
+#include "ecsModule/spriteModule/module.h"
+#include "ecsModule/playerModule/module.h"
+#include "ecsModule/transformModule/module.h"
+#include "ecsModule/appModule/module.h"
+#include "ecsModule/sceneModule/module.h"
+#include "resourceManager.h"
+
+#include "flecs.h"
+
 int main() {
-	auto app = ps::core::Application::create();
-	app->init();
-	app->run();
-	app->shutdown();
-	return 0;
+	ps::ResourceManager::init(std::make_unique<ps::ResourceManager>());
+
+	flecs::world world;
+
+	world.import<ps::AppModule>();
+	world.import<ps::RenderModule>();
+	//world.import<ps::SceneModule>();
+	world.import<ps::TimeModule>();
+	world.import<ps::TransformModule>();
+	world.import<ps::InputModule>();
+	//world.import<ps::UiModule>();
+	world.import<ps::PhysicsModule>();
+	world.import<ps::CameraModule>();
+	world.import<ps::SpriteModule>();
+	//world.import<ps::PlayerModule>();
+
+	world.set<flecs::Rest>({});
+
+	world.app().enable_rest().run();
+
+	//const auto *app = world.get<ps::Application>();
+	//while(app->window.isOpen()) {
+	//	world.progress(world.get<ps::Time>()->deltaTime);
+	//}
 }

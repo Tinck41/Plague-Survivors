@@ -1,29 +1,14 @@
 #include "ecsController.h"
 
-#include "SFML/System/Vector2.hpp"
-#include "ecsModule/components/boxColliderComponent.h"
-#include "ecsModule/components/cameraComponent.h"
-#include "ecsModule/components/dashComponent.h"
-#include "ecsModule/components/inputComponent.h"
-#include "ecsModule/components/playerComponent.h"
-#include "ecsModule/components/rigidbodyComponent.h"
-#include "ecsModule/components/stateComponent.h"
-#include "ecsModule/components/spriteComponent.h"
-#include "ecsModule/components/velocityComponent.h"
-#include "ecsModule/components/transformComponent.h"
-#include "ecsModule/components/rendererComponent.h"
-#include "ecsModule/components/timeComponent.h"
-#include "ecsModule/components/cameraComponent.h"
-#include "ecsModule/components/physicsComponent.h"
-#include "ecsModule/systems/inputSystem.h"
-#include "ecsModule/systems/physicsSystem.h"
-#include "ecsModule/systems/timeSystem.h"
-#include "ecsModule/systems/cameraSystem.h"
-#include "ecsModule/systems/ui/uiSystem.h"
-#include "flecs/addons/cpp/c_types.hpp"
-#include "systems/renderSystem.h"
-#include "box2d/b2_body.h"
-#include "types.h"
+#include "ecsModule/uiModule/module.h"
+#include "ecsModule/cameraModule/module.h"
+#include "ecsModule/physicsModule/module.h"
+#include "ecsModule/timeModule/module.h"
+#include "ecsModule/inputModule/module.h"
+#include "ecsModule/spriteModule/module.h"
+#include "ecsModule/playerModule/module.h"
+#include "ecsModule/transformModule/module.h"
+#include "common.h"
 
 using namespace ps;
 using namespace ecsModule;
@@ -33,161 +18,63 @@ std::unique_ptr<EcsController> EcsController::create() {
 }
 
 void EcsController::init() {
-    initSingletons();
-	initSystemPhases();
-	initSystems();
-
-	m_world.system<InputComponent, VelocityComponent, PlayerComponent>()
-	.with<HandleInputState>()
-	.kind(flecs::OnUpdate)
-	.term_at(0).singleton()
-	.each([this](flecs::entity entity, InputComponent& i, VelocityComponent& v, const PlayerComponent& p) {
-		sf::Vector2f direction { 0.f, 0.f };
-		if (i.keys[Key::A].remain) {
-			direction.x = -1.f;
-		}
-		if (i.keys[Key::D].remain) {
-			direction.x = 1.f;
-		}
-		if (i.keys[Key::W].remain) {
-			direction.y = -1.f;
-		}
-		if (i.keys[Key::S].remain) {
-			direction.y = 1.f;
-		}
-
-		auto normalized = direction;
-		if (direction.x != 0 || direction.y != 0) {
-			normalized = direction.normalized();
-		}
-
-		if (i.keys[Key::Space].pressed && (direction.x != 0 || direction.y != 0)) {
-			DashComponent dash;
-			dash.direction = normalized;
-			dash.distance = 150.f;
-			dash.duration = 0.1f;
-			entity.set(dash);
-		}
-
-		constexpr auto speed = 500.f;
-		v.velocity = sf::Vector2f{ speed * normalized.x, speed * normalized.y };
-	});
-
-	m_world.observer<DashComponent>()
-		.event(flecs::OnSet)
-		.each([](flecs::entity entity, DashComponent& dash) {
-			entity.remove<HandleInputState>();
-			entity.add<DashState>();
-
-			auto v = entity.get_ref<VelocityComponent>();
-			auto speed = dash.distance / dash.duration;
-			v->velocity = sf::Vector2f{ speed * dash.direction.x, speed * dash.direction.y };
-		});
-
-	m_world.observer<DashComponent>()
-		.event(flecs::OnRemove)
-		.each([](flecs::iter& it, size_t size, DashComponent& dash) {
-			auto entity = it.entity(size);
-			entity.add<HandleInputState>();
-			entity.remove<DashState>();
-
-			auto camera = it.world().singleton<CameraComponent>();
-			camera.set(CameraShakingComponent {
-				.duration = 0.1f,
-                .horizontalOffset = { -10.f, 10.f },
-				.verticalOffset = { -10.f, 10.f }
-			});
-
-			auto v = entity.get_ref<VelocityComponent>();
-			auto speed = 500.f;
-			v->velocity = sf::Vector2f{ speed, speed };
-		});
-
-	m_world.system<DashComponent, VelocityComponent>()
-		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t size, DashComponent& d, VelocityComponent& v) {
-			if (d.timer < d.duration) {
-				d.timer += it.delta_time();
-			} else {
-				it.entity(size).remove<DashComponent>();
-			}
-		});
-
-	m_world.system<VelocityComponent, RigidbodyComponent>()
-		.kind(Phases::Update)
-		.each([](VelocityComponent& v, RigidbodyComponent& r) {
-			auto body = (b2Body*)r.body;
-			body->SetLinearVelocity({ v.velocity.x / 30.f, v.velocity.y / 30.f });
-		});
-
-	m_world.system<SpriteComponent, TransformComponent>()
-	.kind(Phases::Update)
-	.each([](SpriteComponent& s, const TransformComponent& t) {
-		s.sprite.setPosition({ t.translation.x, t.translation.y });
-	});
-
-	auto player = m_world.entity("player")
-	.add<PlayerComponent>()
-	.add<HandleInputState>()
-	.insert([](TransformComponent& t, VelocityComponent& v, SpriteComponent& s) {
-		t.translation = { 0.f, 0.f };
-		s.sprite.setSize({ 50.f, 50.f });
-		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
-		s.color = sf::Color::Green;
-		s.sprite.setFillColor(s.color);
-		v.velocity = { 300.f, 300.f };
-	})
-	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
-		b.size = { 50.f, 50.f };
-		r.Type = RigidbodyComponent::BodyType::Dynamic;
-	});
-
-	auto camera = m_world.get_ref<CameraComponent>();
-	camera->target = player;
-
-	m_world.entity()
-	.insert([](TransformComponent& t, SpriteComponent& s) {
-		t.translation = { 300.f, 300.f };
-		s.sprite.setSize({ 150.f, 150.f });
-		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
-		s.color = sf::Color::Red;
-		s.sprite.setFillColor(s.color);
-	})
-	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
-		b.size = { 150.f, 150.f };
-		r.Type = RigidbodyComponent::BodyType::Static;
-	});
-	m_world.entity("obstacle")
-	.insert([](TransformComponent& t, SpriteComponent& s) {
-		t.translation = { 600.f, 50.f };
-		s.sprite.setSize({ 50.f, 50.f });
-		s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
-		s.color = sf::Color::Red;
-		s.sprite.setFillColor(s.color);
-	})
-	.insert([](RigidbodyComponent& r, BoxColliderComponent& b) {
-		b.size = { 50.f, 50.f };
-		r.Type = RigidbodyComponent::BodyType::Static;
-	});
-}
-
-void EcsController::initSingletons() {
-    m_world.set<RendererComponent>({
-         .renderer = std::make_unique<sf::RenderWindow>(sf::VideoMode({ 600, 600 }), "Plague: Survivors")
-    });
-
-    m_world.set<InputComponent>({});
-
-    m_world.set<TimeComponent>({});
-
-    m_world.set<PhysicsComponent>({});
-
-    m_world.component<CameraComponent>().add(flecs::With, m_world.component<VelocityComponent>());
-    auto camera = m_world.entity<CameraComponent>();
-    camera.set<CameraComponent>({});
-    camera.set(VelocityComponent {
-            .velocity = { 5.f, 5.f }
-    });
+//	initSystemPhases();
+//
+//	m_world.import<TimeModule>();
+//	m_world.import<TransformModule>();
+//	m_world.import<InputModule>();
+//	m_world.import<UiModule>();
+//	m_world.import<PhysicsModule>();
+//	m_world.import<CameraModule>();
+//	m_world.import<SpriteModule>();
+//	m_world.import<PlayerModule>();
+//
+//	auto player = m_world.entity("player")
+//	.add<Player>()
+//	.add<HandleInputState>()
+//	.insert([](Transform& t, Velocity& v, Sprite& s) {
+//		t.translation = { 50.f, 50.f };
+//		s.sprite.setSize({ 50.f, 50.f });
+//		//s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
+//		s.color = sf::Color::Green;
+//		s.sprite.setFillColor(s.color);
+//		v = { 300.f, 300.f };
+//	})
+//	.set<BoxCollider>({ .size = { 50.f, 50.f } })
+//	.set<Rigidbody>({ .Type = Rigidbody::BodyType::Dynamic });
+//
+//	m_world.entity("turret")
+//		.insert([](Transform& t, Sprite& s) {
+//			t.translation = { 50.f, 0.f };
+//			s.sprite.setSize({ 100.f, 50.f });
+//			s.color = sf::Color::Blue;
+//			s.sprite.setFillColor(s.color);
+//		})
+//		.child_of(player);
+//
+//	auto camera = m_world.get_ref<Camera>();
+//	camera->target = player;
+//
+//	m_world.entity()
+//	.insert([](Transform& t, Sprite& s) {
+//		t.translation = { 300.f, 300.f };
+//		s.sprite.setSize({ 150.f, 150.f });
+//		//s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
+//		s.color = sf::Color::Red;
+//		s.sprite.setFillColor(s.color);
+//	})
+//	.set<BoxCollider>({ .size = { 150.f, 150.f } })
+//	.set<Rigidbody>({ .Type = Rigidbody::BodyType::Static });
+//	m_world.entity("obstacle")
+//	.insert([](Transform& t, Sprite& s) {
+//		t.translation = { 600.f, 50.f };
+//		s.sprite.setSize({ 50.f, 50.f });
+//		//s.sprite.setOrigin(s.sprite.getSize() * 0.5f);
+//		s.color = sf::Color::Red;
+//		s.sprite.setFillColor(s.color);
+//	})
+//	.set<BoxCollider>({ .size = { 50.f, 50.f } })
+//	.set<Rigidbody>({ .Type = Rigidbody::BodyType::Static });
 }
 
 void EcsController::initSystemPhases() {
@@ -199,9 +86,13 @@ void EcsController::initSystemPhases() {
 		.add(flecs::Phase)
 		.depends_on(flecs::OnUpdate);
 
+	m_world.entity(Phases::PostUpdate)
+		.add(flecs::Phase)
+		.depends_on(Phases::Update);
+
 	m_world.entity(Phases::Clear)
 		.add(flecs::Phase)
-		.depends_on(flecs::PostUpdate);
+		.depends_on(Phases::PostUpdate);
 
 	m_world.entity(Phases::Render)
 		.add(flecs::Phase)
@@ -210,15 +101,6 @@ void EcsController::initSystemPhases() {
 	m_world.entity(Phases::Display)
 		.add(flecs::Phase)
 		.depends_on(Phases::Render);
-}
-
-void EcsController::initSystems() {
-	RenderSystem::create();
-	TimeSystem::create();
-	PhysicsSystem::create();
-	InputSystem::create();
-	CameraSystem::create();
-	ui::UiSystem::create();
 }
 
 flecs::world& EcsController::getWorld() {
