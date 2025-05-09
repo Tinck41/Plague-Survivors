@@ -1,11 +1,11 @@
 #pragma once
 
-#include "SFML/Graphics.hpp"
 #include "flecs.h"
 
 namespace ps {
 	struct Application {
-		sf::RenderWindow window;
+		int targetFPS = 60;
+		bool isVSyncEnabled = false;
 	};
 
 	struct AppModule {

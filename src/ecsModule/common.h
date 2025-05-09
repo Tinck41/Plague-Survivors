@@ -11,6 +11,7 @@ namespace ps {
 		PostUpdate,
 		Clear,
 		Render,
+		RenderUI,
 		Display,
 	};
 }

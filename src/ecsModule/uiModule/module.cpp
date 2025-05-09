@@ -1,19 +1,14 @@
 #include "module.h"
 
-#include "SFML/Graphics/Sprite.hpp"
 #include "ecsModule/common.h"
 #include "ecsModule/transformModule/module.h"
-#include "ecsModule/inputModule/module.h"
-#include "ecsModule/appModule/module.h"
-#include <format>
+#include "raylib.h"
+#include "ext/matrix_transform.hpp"
+#include "gtc/quaternion.hpp"
+
 #include <functional>
-#include <iostream>
 
 using namespace ps;
-
-int depth = 0;
-
-sf::Font defaultFont;
 
 void dfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
 	callback(e);
@@ -26,239 +21,286 @@ void dfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
 UiModule::UiModule(flecs::world& world) {
 	world.module<UiModule>();
 
-	world.component<RootNode>().add(flecs::Exclusive);
-	world.component<Node>();
-	//world.component<Anchor>();
-	//world.component<Pivot>();
-	world.component<UiTraversalId>();
-	world.component<Style>();
+	world.import<TransformModule>();
+
+	world.component<Anchor>();
+	world.component<Pivot>();
+	world.component<BackgroundColor>();
 	world.component<Interaction>();
-	world.component<Image>();
-	world.component<Text>();
+	world.component<UiRenderQueue>();
+	world.component<Node>()
+		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<Anchor>())
+		.add(flecs::With, world.component<Pivot>())
+		.add(flecs::With, world.component<BackgroundColor>());
+	world.component<RootNode>()
+		.add(flecs::With, world.component<Node>())
+		.add(flecs::Exclusive);
+	world.component<Primitive>()
+		.add(flecs::With, world.component<Node>());
+	world.component<Image>()
+		.add(flecs::With, world.component<Node>());
+	world.component<Text>()
+		.add(flecs::With, world.component<Node>());
+	world.component<Button>()
+		.add(flecs::With, world.component<Node>())
+		.add(flecs::With, world.component<Interaction>());
 
-	//world.component<Anchor>()
-	//	.member<float>("x")
-	//	.member<float>("y");
+	world.component<Node>()
+		.member<glm::vec2>("pos")
+		.member<glm::vec2>("size");
 
-	//world.component<Pivot>()
-	//	.member<float>("x")
-	//	.member<float>("y");
+	world.component<Anchor>()
+		.member<float>("x")
+		.member<float>("y");
 
+	world.component<Pivot>()
+		.member<float>("x")
+		.member<float>("y");
 
-	if (!defaultFont.openFromFile("assets/FreeSans.ttf")) {
-		std::cout << "can't load default font\n";
-	}
+	world.component<BackgroundColor>()
+		.member<unsigned char>("r")
+		.member<unsigned char>("g")
+		.member<unsigned char>("b")
+		.member<unsigned char>("a");
 
-	auto root = world.entity(UI_ROO_ID).add<Node>().add<RootNode>().add<Transform>();
+	world.component<std::string>()
+		.opaque(flecs::String)
+			.serialize([](const flecs::serializer *s, const std::string *data) {
+				const char *str = data->c_str();
+				return s->value(flecs::String, &str);
+			})
+			.assign_string([](std::string* data, const char *value) {
+				*data = value;
+			});
 
-	world.observer<Style>()
+	world.component<Text>()
+		.member<std::string>("string")
+		.member<float>("fontSize")
+		.member<float>("spacing");
+
+	world.component<Interaction::eType>()
+		.constant("None", Interaction::eType::None)
+		.constant("Hovered", Interaction::eType::Hovered)
+		.constant("Clicked", Interaction::eType::Clicked);
+
+	world.component<Interaction>()
+		.member<Interaction::eType>("type");
+
+	world.component<Primitive>()
+		.member<glm::vec2>("size");
+
+	world.component<Image>()
+		.member<std::string>("path")
+		.member<Texture2D>("texture")
+		.member<std::optional<Rectangle>>("rect");
+
+	world.component<Button>()
+		.member<glm::vec2>("size")
+		.member<Color>("defaultColor")
+		.member<Color>("hoverColor")
+		.member<Color>("clickColor");
+
+	world.add<UiRenderQueue>();
+
+	auto root = world.entity(UI_ROO_ID).add<RootNode>().add(flecs::OrderedChildren);
+
+	world.observer<Image>()
+		.event(flecs::OnAdd)
 		.event(flecs::OnSet)
-		.each([](Style& s) {
-			s.shape.setFillColor(s.backgroundColor);
+		.each([](Image& i) {
+			i.texture = LoadTexture(i.path.c_str());
 		});
 
 	world.observer<Node>()
 		.event(flecs::OnSet)
-		.each([&root](flecs::iter& it, size_t size, Node node) {
+		.each([root](flecs::iter& it, size_t size, Node node) {
+			if (root.has<Dirty>()) {
+				return;
+			}
+
 			root.add<Dirty>();
-			depth = 0;
 		});
 
-	world.system<RootNode, Dirty>()
+	world.system<Node, GlobalTransform, Primitive>()
+		.with<Dirty>()
 		.kind(Phases::Update)
-		.each([world](flecs::entity e, RootNode, Dirty) {
-			e.remove<Dirty>();
+		.each([](Node& n, GlobalTransform& t, Primitive& p) {
+			n.size = p.size * glm::vec2{ t.scale };
+		});
 
-			dfs(e, [](flecs::entity e) {
-				e.set<UiTraversalId>(depth++);
+	world.system<Node, GlobalTransform, Image>()
+		.with<Dirty>()
+		.kind(Phases::Update)
+		.each([](Node& n, GlobalTransform& t, Image& i) {
+			n.size = glm::vec2{ i.texture. width, i.texture.height } * glm::vec2{ t.scale };
+		});
+
+	world.system<Node, GlobalTransform, Text>()
+		.with<Dirty>()
+		.kind(Phases::Update)
+		.each([](Node& n, GlobalTransform& t, Text& text) {
+			const auto fontRect = MeasureTextEx(GetFontDefault(), text.string.c_str(), text.fontSize * t.scale.x, text.spacing);
+			n.size = glm::vec2{ fontRect.x, fontRect.y } * glm::vec2{ t.scale };
+		});
+
+	world.system<RootNode>()
+		.with<Dirty>()
+		.kind(Phases::Update) // mb post update;
+		.each([](flecs::entity root, RootNode) {
+			auto zIndex = -1;
+			dfs(root, [&zIndex](flecs::entity e) {
+				e.get_ref<Transform>()->translation.z = ++zIndex;
 			});
 		});
 
-	//world.system<Style*, Transform, Anchor*, Pivot*, Style>()
-	//	.term_at(0).parent().cascade()
-	//	.term_at(1).second<Global>()
-	//	.with<Node>()
-	//	.with<Dirty>()
-	//	.kind(Phases::Update)
-	//	.each([](Style* parentS, Transform& childT, Anchor* childA, Pivot* childP, Style& childS) {
-	//		if (parentS) {
-	//			if (childA) {
-	//				childT.translation.x += parentS->size.x * childA->x;
-	//				childT.translation.y += parentS->size.y * childA->y;
-	//			}
-	//		}
-	//		if (childP) {
-	//			childT.translation.x += childS.size.x * childP->x;
-	//			childT.translation.y += childS.size.y * childP->y;
-	//		}
-	//	});
+	world.system<Node*, Node, GlobalTransform, Anchor, Pivot>()
+		.term_at(0).parent().cascade().cached()
+		.kind(Phases::Update) // mb post update;
+		.each([](Node* pNode, Node& cNode, GlobalTransform& cTransform, Anchor& anc, Pivot& piv) {
+			auto parentSize = pNode ? glm::vec2{ pNode->size.x, pNode->size.y } : glm::vec2{ 600, 600 };
 
-	world.system<const Input, Interaction, const Style, const UiTraversalId>()
-		.with<Node>()
-		.term_at(0).singleton()
+			cNode.matrix = glm::mat4{ 1.f };
+			cNode.matrix = glm::translate(cNode.matrix, glm::vec3{ parentSize * anc, 0 });
+			cNode.matrix = glm::translate(cNode.matrix, glm::vec3{ cNode.size * -piv, 0 });
+
+			if (pNode) {
+				cNode.matrix = pNode->matrix * cNode.matrix;
+			}
+
+			auto matrix = cTransform.matrix * cNode.matrix;
+
+			cNode.pos = glm::vec2(matrix[3]);
+		});
+
+	world.system<Interaction, const Node, const GlobalTransform>()
 		.kind(Phases::Update)
-		.order_by<UiTraversalId>([](flecs::entity_t e1, const UiTraversalId *d1, flecs::entity_t e2, const UiTraversalId *d2) {
-			return (*d1 < *d2) - (*d1 > *d2);
+		.order_by<GlobalTransform>([](flecs::entity_t e1, const GlobalTransform *d1, flecs::entity_t e2, const GlobalTransform *d2) {
+			return (d1->translation.z < d2->translation.z) - (d1->translation.z > d2->translation.z);
 		})
 		.run([](flecs::iter& it) {
 			auto hovered = false;
 
 			while (it.next()) {
-				auto input       = it.field<const Input>(0);
-				auto interaction = it.field<Interaction>(1);
-				auto style       = it.field<const Style>(2);
+				auto interaction = it.field<Interaction>(0);
+				auto node        = it.field<const Node>(1);
 
 				for (auto i : it ) {
-					const auto mouseInsideRect = [&] {
-						const auto entityShape = style[i].shape;
-						const auto mousePos = input->mouse.position;
-
-						const auto globalBounds = entityShape.getGlobalBounds();
-
-						const auto containsClient = globalBounds.contains(mousePos);
-
-						return containsClient;
-					}();
-
-					if (mouseInsideRect) {
-						//spdlog::info("mouser inside {}, hovered: {}", entity.name(), hovered);
-						if (!hovered && interaction[i].type != Interaction::Type::Hovered) {
-							interaction[i].type = Interaction::Type::Hovered;
+					if (CheckCollisionPointRec(GetMousePosition(), { node[i].pos.x, node[i].pos.y, node[i].size.x, node[i].size.y })) {
+						if (!hovered && interaction[i].type != Interaction::eType::Hovered) {
+							interaction[i].type = Interaction::eType::Hovered;
 							hovered = true;
 						} else {
 							if (hovered) {
-								interaction[i].type = Interaction::Type::None;
+								interaction[i].type = Interaction::eType::None;
 							} else {
 								hovered = true;
 							}
 						}
+
+						if (hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+							interaction[i].type = Interaction::eType::Clicked;
+						}
 					} else {
-						interaction[i].type = Interaction::Type::None;
+						interaction[i].type = Interaction::eType::None;
 					}
 				}
 			}
 		});
 
-	world.system<const Interaction, Style>()
-		.with<Node>()
+	world.system<const Interaction, const Button, BackgroundColor>()
 		.kind(Phases::Update)
-		.each([](const Interaction& i, Style& s) {
+		.each([](flecs::entity e, const Interaction& i, const Button& b, BackgroundColor& c) {
 			switch (i.type) {
-				case Interaction::Type::Hovered:
-					//spdlog::info("{} is hovered", entity.name());
-					s.shape.setFillColor(sf::Color::Red);
+				case Interaction::eType::Hovered:
+					c = b.hoverColor;
 					break;
-				case Interaction::Type::Clicked:
-					s.shape.setFillColor(sf::Color::Green);
+				case Interaction::eType::Clicked:
+					c = b.clickColor;
 					break;
-				case Interaction::Type::None:
-					s.shape.setFillColor(s.backgroundColor);
+				case Interaction::eType::None:
+					c = b.defaultColor;
 					break;
 				default:
 					break;
 			}
 		});
 
-	world.system<Style, const GlobalTransform>()
-		.with<Node>()
-		.kind(Phases::Update)
-		.each([](Style& s, const GlobalTransform& t) {
-			s.shape.setPosition({ t.translation.x , t.translation.y });
-		});
-
-	world.system<Application, Style*, Image*, Text*, const UiTraversalId>()
-		.with<Node>()
+	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Primitive>()
 		.term_at(0).singleton()
-		.kind(Phases::Render)
-		.order_by<UiTraversalId>([](flecs::entity_t e1, const UiTraversalId *d1, flecs::entity_t e2, const UiTraversalId *d2) {
-			return (*d1 > *d2) - (*d1 < *d2);
-		})
-		.each([](Application& app, Style* s, Image* i, Text* t, UiTraversalId) {
-			if (s) {
-				app.window.draw(s->shape);
-			}
-			if (i) {
-				app.window.draw(sf::Sprite(i->texture));
-			}
-			if (t) {
-				app.window.draw(*t->text);
-			}
+		.kind(Phases::Update)
+		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Primitive& p) {
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				PrimitiveRenderData{
+					.rec      = { n.pos.x, n.pos.y, n.size.x, n.size.y },
+					.rotation = 0.f, // TODO
+					.color    = c
+				}
+			);
 		});
 
-	const auto windowSize = [&]() {
-		const auto windowSize = world.get<Application>()->window.getSize();
-		return sf::Vector2f { static_cast<float>(windowSize.x), static_cast<float>(windowSize.y) };
-	}();
-	const auto canvas = world.entity("canvas")
-		.child_of(root)
-		.add<Node>()
-		.set(Transform{})
-		.set(Image{
-			.texture{ "assets/main_menu.jpg" },
-		})
-		.set(Style {
-			.size = windowSize,
-			.backgroundColor = sf::Color::Blue,
-			.shape = sf::RectangleShape{ windowSize }
+	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Image>()
+		.term_at(0).singleton()
+		.kind(Phases::Update)
+		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Image& i) {
+			const auto source = [i]() {
+				if (i.part) {
+					return i.part.value();
+				}
+
+				return Rectangle{ 0.f, 0.f, static_cast<float>(i.texture.width), static_cast<float>(i.texture.height) };
+			}();
+
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				ImageRenderData{
+					.texture  = i.texture,
+					.source   = source,
+					.dest     = { n.pos.x, n.pos.y, n.size.x, n.size.y },
+					.rotation = 0.f, // TODO
+					.color    = c,
+				}
+			);
 		});
 
-	auto button = world.entity("button")
-		.child_of(canvas)
-		.add<Node>()
-		.add<Interaction>()
-		.set(Style {
-			.size = { 200.f, 60.f },
-			.backgroundColor = sf::Color::Cyan,
-			.shape = sf::RectangleShape{{ 200.f, 60.f }}
-		})
-		.set(Transform {
-			.translation = {10.f, 0.f }
+	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Text>()
+		.term_at(0).singleton()
+		.kind(Phases::Update)
+		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Text& text) {
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				TextRenderData{
+					.font     = GetFontDefault(),
+					.text     = text.string.c_str(),
+					.position = { n.pos.x, n.pos.y },
+					.rotation = 0.f, // TODO
+					.fontSize = text.fontSize * t.scale.x,
+					.spacing  = text.spacing,
+					.color    = c
+				}
+			);
 		});
 
-	auto button2 = world.entity("button2")
-		.child_of(canvas)
-		.add<Node>()
-		.set(Style {
-			.size = { 200.f, 60.f },
-			.backgroundColor = sf::Color::Cyan,
-			.shape = sf::RectangleShape{{ 200.f, 60.f }}
-		})
-		.set(Transform {
-			.translation = {10.f, 80.f }
+
+	world.system<UiRenderQueue>("NodeRenderSystem")
+		.term_at(0).singleton()
+		.kind(Phases::RenderUI)
+		.each([](UiRenderQueue& queue) {
+			std::ranges::sort(queue.renderCommands, [](const UiRenderCommand& lhs, const UiRenderCommand& rhs) {
+				return lhs.sortIndex < rhs.sortIndex;
+			});
+
+			for (const auto& command : queue.renderCommands) {
+				std::visit(UiRenderCommandDispatcher{}, command.renderData);
+			}
+
+			queue.renderCommands.clear();
 		});
-	auto button3 = world.entity("button3")
-		.child_of(button2)
-		.add<Node>()
-		.add<Interaction>()
-		.set(Style {
-			.size = { 50.f, 50.f },
-			.backgroundColor = sf::Color::Cyan,
-			.shape = sf::RectangleShape{{ 50.f, 50.f }}
-		})
-		.set(Transform {
-			.translation = { 210.f, 80.f }
-		});
-	auto button4 = world.entity("button4")
-		.child_of(button2)
-		.add<Node>()
-		.add<Interaction>()
-		.set(Style {
-			.size = { 100.f, 100.f },
-			.backgroundColor = sf::Color::Black,
-			.shape = sf::RectangleShape{{ 100.f, 100.f }}
-		})
-		.set(Transform {
-			.translation = { 210.f, 90.f }
-		});
-		sf::Text text{ defaultFont, "", 32u };
-	auto button5 = world.entity("button5")
-		.child_of(button4)
-		.add<Node>()
-		.set(Text{
-			.text = new sf::Text{ defaultFont, "hello", 32u }
-		})
-		.set(Transform {
-			.translation = { 210.f, 80.f }
-		})
-		.add<Dirty>();
+
+	root.set<Node>({
+		.pos{ 0, 0 },
+		.size{ 600, 600 }
+	});
 }
+

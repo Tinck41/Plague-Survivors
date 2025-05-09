@@ -2,6 +2,7 @@
 
 #include "ecsModule/common.h"
 #include "ecsModule/sceneModule/module.h"
+#include "raylib.h"
 
 using namespace ps;
 
@@ -15,9 +16,7 @@ AppModule::AppModule(flecs::world& world) {
 
 	world.component<Application>();
 
-	world.set<Application>({
-		.window{sf::VideoMode{ sf::Vector2u{ WINDOW_WIDTH, WINDOW_HEIGHT } }, WINDOW_TITLE, sf::Style::Default, sf::State::Windowed}
-	});
+	world.add<Application>();
 
 	world.entity(Phases::OnStart)
 		.add(flecs::Phase)
@@ -47,7 +46,21 @@ AppModule::AppModule(flecs::world& world) {
 		.add(flecs::Phase)
 		.depends_on(Phases::Clear);
 
+	world.entity(Phases::RenderUI)
+		.add(flecs::Phase)
+		.depends_on(Phases::Clear);
+
 	world.entity(Phases::Display)
 		.add(flecs::Phase)
-		.depends_on(Phases::Render);
+		.depends_on(Phases::RenderUI);
+
+	world.observer<Application>()
+		.event(flecs::OnAdd)
+		.each([](Application& app) {
+			if (app.isVSyncEnabled) {
+				SetConfigFlags(FLAG_VSYNC_HINT);
+			}
+			SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+			SetTargetFPS(app.targetFPS);
+		});
 }

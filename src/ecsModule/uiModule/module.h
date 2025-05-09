@@ -1,52 +1,108 @@
 #pragma once
 
-#include "SFML/Graphics/Color.hpp"
-#include "SFML/Graphics/Image.hpp"
-#include "SFML/Graphics/RectangleShape.hpp"
-#include "SFML/Graphics/Sprite.hpp"
-#include "SFML/Graphics/Text.hpp"
-#include "SFML/Graphics/Texture.hpp"
-#include "SFML/System/Vector2.hpp"
+#include "raylib.h"
 #include "flecs.h"
+#include "glm.hpp"
+
+#include <string>
+#include <vector>
 
 namespace ps {
 	inline static constexpr const char* UI_ROO_ID = "uiRoot";
 
 	struct RootNode {};
-	struct Node {};
+	struct Node {
+		glm::vec2 pos;
+		glm::vec2 size;
+		glm::mat4 matrix;
+	};
 
-	//struct Anchor : public sf::Vector2<float> {};
-	//struct Pivot : public sf::Vector2<float> {};
+	struct ImageRenderData {
+		Texture2D texture;
+		Rectangle source;
+		Rectangle dest;
+		float rotation;
+		Color color;
+	};
 
-	struct Style {
-		sf::Vector2f size { 0.f, 0.f };
-		sf::Color backgroundColor{ sf::Color::Transparent };
-		sf::RectangleShape shape;
+	struct PrimitiveRenderData {
+		Rectangle rec;
+		float rotation;
+		Color color;
+	};
+
+	struct TextRenderData {
+		Font font;
+		const char *text;
+		Vector2 position;
+		float rotation;
+		float fontSize;
+		float spacing;
+		Color color;
+	};
+
+	using UiRenderData = std::variant<ImageRenderData, PrimitiveRenderData, TextRenderData>;
+
+	struct UiRenderCommand {
+		int sortIndex;
+		UiRenderData renderData;
+	};
+
+	struct UiRenderCommandDispatcher {
+		void operator()(const ImageRenderData& data) {
+			DrawTexturePro(data.texture, data.source, data.dest, {}, data.rotation, data.color);
+		}
+		void operator()(const PrimitiveRenderData& data) {
+			DrawRectanglePro(data.rec, {}, data.rotation, data.color);
+		}
+		void operator()(const TextRenderData& data) {
+			DrawTextPro(data.font, data.text, data.position, {}, data.rotation, data.fontSize, data.spacing, data.color);
+		}
+	};
+
+	struct UiRenderQueue {
+		std::vector<UiRenderCommand> renderCommands;
+	};
+
+	struct Anchor : public glm::vec2 {};
+	struct Pivot : public glm::vec2 {};
+	struct BackgroundColor : public Color {
+		BackgroundColor() : Color(WHITE) {}
+		BackgroundColor(Color color) : Color(color) {}
+	};
+
+	struct Primitive {
+		glm::vec2 size;
 	};
 
 	struct Interaction {
-		enum class Type {
+		enum class eType {
 			None,
 			Hovered,
 			Clicked
 		};
 
-		Type type;
+		eType type;
 	};
 
-	//using Text = sf::Text;
 	struct Text {
-		sf::Text* text;
+		std::string string;
+		float fontSize;
+		float spacing;
 	};
 
 	struct Image {
-		sf::Texture texture;
-		sf::Image img;
-		sf::Color color;
 		std::string path;
+		Texture2D texture;
+		std::optional<Rectangle> part;
 	};
 
-	using UiTraversalId = int;
+	struct Button {
+		glm::vec2 size;
+		Color defaultColor;
+		Color hoverColor;
+		Color clickColor;
+	};
 
 	struct UiModule {
 		UiModule(flecs::world& world);

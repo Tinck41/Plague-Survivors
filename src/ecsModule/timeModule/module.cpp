@@ -1,10 +1,8 @@
 #include "module.h"
 
-#include "SFML/System.hpp"
+#include "raylib.h"
 
 using namespace ps;
-
-sf::Clock deltaClock;
 
 TimeModule::TimeModule(flecs::world& world) {
 	world.module<TimeModule>();
@@ -17,6 +15,6 @@ TimeModule::TimeModule(flecs::world& world) {
 		.term_at(0).singleton()
 		.kind(flecs::OnStore)
 		.each([](Time& t) {
-			t.deltaTime = deltaClock.restart().asSeconds();
+			t.deltaTime = GetFrameTime();
 		});
 }
