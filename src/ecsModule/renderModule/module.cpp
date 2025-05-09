@@ -12,12 +12,6 @@ RenderModule::RenderModule(flecs::world& world) {
 
 	world.import<TransformModule>();
 
-	world.component<Color>()
-		.member<unsigned char>("r")
-		.member<unsigned char>("g")
-		.member<unsigned char>("b")
-		.member<unsigned char>("a");
-
 	world.component<Sprite>()
 		.member<Color>("color")
 		.add(flecs::With, world.component<Transform>());
@@ -25,8 +19,19 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<Circle>().add(flecs::With, world.component<Transform>());
 	world.component<Window>();
 
+	world.component<Color>()
+		.member<unsigned char>("r")
+		.member<unsigned char>("g")
+		.member<unsigned char>("b")
+		.member<unsigned char>("a");
+
+	world.component<Window>()
+		.member<std::string>("title")
+		.member<int>("width")
+		.member<int>("height");
+
 	world.observer<Window>()
-		.event(flecs::OnSet)
+		.event(flecs::OnAdd)
 		.each([](Window& win) {
 			InitWindow(win.width, win.height, win.title.c_str());
 		});

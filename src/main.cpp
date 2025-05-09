@@ -23,10 +23,10 @@ int main() {
 	//world.import<ps::SceneModule>();
 	world.import<ps::TimeModule>();
 	world.import<ps::TransformModule>();
-	//world.import<ps::InputModule>();
+	world.import<ps::InputModule>();
 	world.import<ps::UiModule>();
 	//world.import<ps::PhysicsModule>();
-	//world.import<ps::CameraModule>();
+	world.import<ps::CameraModule>();
 	//world.import<ps::SpriteModule>();
 	//world.import<ps::PlayerModule>();
 	world.import<flecs::stats>();
