@@ -20,12 +20,14 @@ SceneModule::SceneModule(flecs::world& world) {
 		.pip = world.pipeline()
 			.with(flecs::System)
 			.without<GameScene>()
+			.with(flecs::Phase).cascade(flecs::DependsOn).optional()
 			.build()
 	});
 	world.set<GameScene>({
 		.pip = world.pipeline()
 			.with(flecs::System)
 			.without<MenuScene>()
+			.with(flecs::Phase).cascade(flecs::DependsOn).optional()
 			.build()
 	});
 
@@ -56,6 +58,13 @@ SceneModule::SceneModule(flecs::world& world) {
 
 			ecs.set_pipeline(ecs.get<GameScene>()->pip);
 		});
+
+	// Example
+	//world.system()
+	//	.kind(Phases::Update)
+	//	.kind<GameScene>() // Should always come second
+	//	.each([](flecs::iter& it, size_t) {
+	//	});
 
 	world.add<ActiveScene, MenuScene>();
 }
