@@ -1,13 +1,21 @@
 #pragma once
 
-#include "SFML/System/Vector2.hpp"
+#include "raylib.h"
 #include "flecs.h"
+#include "vec2.hpp"
 
 namespace ps {
+	enum class CameraPhases {
+		BeginCameraMode,
+		EndCameraMode,
+	};
+
 	struct Camera {
 		flecs::entity target;
-		sf::Vector2f center;
-		sf::Vector2f offset;
+		glm::vec2 center;
+		glm::vec2 offset;
+		float rotation;
+		float zoom = 1.f;
 	};
 
 	struct CameraTransition {
@@ -21,8 +29,8 @@ namespace ps {
 
 	struct CameraShaking {
 		float duration = 1.f;
-		sf::Vector2f horizontalOffset { 0.f, 0.f };
-		sf::Vector2f verticalOffset { 0.f, 0.f };
+		glm::vec2 horizontalOffset { 0.f, 0.f };
+		glm::vec2 verticalOffset { 0.f, 0.f };
 	};
 
 	struct CameraModule {

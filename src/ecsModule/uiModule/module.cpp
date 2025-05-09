@@ -1,6 +1,7 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
+#include "ecsModule/inputModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "raylib.h"
 #include "ext/matrix_transform.hpp"
@@ -173,7 +174,8 @@ UiModule::UiModule(flecs::world& world) {
 			cNode.pos = glm::vec2(matrix[3]);
 		});
 
-	world.system<Interaction, const Node, const GlobalTransform>()
+	world.system<Input, Interaction, const Node, const GlobalTransform>()
+		.term_at(0).inout(flecs::InOut).singleton()
 		.kind(Phases::Update)
 		.order_by<GlobalTransform>([](flecs::entity_t e1, const GlobalTransform *d1, flecs::entity_t e2, const GlobalTransform *d2) {
 			return (d1->translation.z < d2->translation.z) - (d1->translation.z > d2->translation.z);
@@ -182,11 +184,12 @@ UiModule::UiModule(flecs::world& world) {
 			auto hovered = false;
 
 			while (it.next()) {
-				auto interaction = it.field<Interaction>(0);
-				auto node        = it.field<const Node>(1);
+				auto input       = it.field<Input>(0)[0];
+				auto interaction = it.field<Interaction>(1);
+				auto node        = it.field<const Node>(2);
 
 				for (auto i : it ) {
-					if (CheckCollisionPointRec(GetMousePosition(), { node[i].pos.x, node[i].pos.y, node[i].size.x, node[i].size.y })) {
+					if (CheckCollisionPointRec({ input.mouse.position.x, input.mouse.position.y }, { node[i].pos.x, node[i].pos.y, node[i].size.x, node[i].size.y })) {
 						if (!hovered && interaction[i].type != Interaction::eType::Hovered) {
 							interaction[i].type = Interaction::eType::Hovered;
 							hovered = true;
@@ -198,7 +201,7 @@ UiModule::UiModule(flecs::world& world) {
 							}
 						}
 
-						if (hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+						if (hovered && input.mouse.left.remain) {
 							interaction[i].type = Interaction::eType::Clicked;
 						}
 					} else {

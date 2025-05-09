@@ -16,8 +16,6 @@ AppModule::AppModule(flecs::world& world) {
 
 	world.component<Application>();
 
-	world.add<Application>();
-
 	world.entity(Phases::OnStart)
 		.add(flecs::Phase)
 		.depends_on(flecs::OnStart);
@@ -48,7 +46,7 @@ AppModule::AppModule(flecs::world& world) {
 
 	world.entity(Phases::RenderUI)
 		.add(flecs::Phase)
-		.depends_on(Phases::Clear);
+		.depends_on(Phases::Render);
 
 	world.entity(Phases::Display)
 		.add(flecs::Phase)
@@ -63,4 +61,7 @@ AppModule::AppModule(flecs::world& world) {
 			SetConfigFlags(FLAG_WINDOW_RESIZABLE);
 			SetTargetFPS(app.targetFPS);
 		});
+
+	world.set<Application>({});
+
 }
