@@ -20,7 +20,7 @@ int main() {
 
 	world.import<ps::AppModule>();
 	world.import<ps::RenderModule>();
-	//world.import<ps::SceneModule>();
+	world.import<ps::SceneModule>();
 	world.import<ps::TimeModule>();
 	world.import<ps::TransformModule>();
 	world.import<ps::InputModule>();
