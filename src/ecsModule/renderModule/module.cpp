@@ -1,9 +1,8 @@
 #include "module.h"
 
-#include "SFML/Graphics/Color.hpp"
-#include "ecsModule/appModule/module.h"
 #include "ecsModule/common.h"
 #include "ecsModule/transformModule/module.h"
+#include "raylib.h"
 #include "resourceManager.h"
 
 using namespace ps;
@@ -11,162 +10,117 @@ using namespace ps;
 RenderModule::RenderModule(flecs::world& world) {
 	world.module<RenderModule>();
 
-	world.import<AppModule>();
 	world.import<TransformModule>();
 
-	world.component<sf::Color>()
-		.member<std::uint8_t>("r")
-		.member<std::uint8_t>("g")
-		.member<std::uint8_t>("b")
-		.member<std::uint8_t>("a");
+	world.component<Color>()
+		.member<unsigned char>("r")
+		.member<unsigned char>("g")
+		.member<unsigned char>("b")
+		.member<unsigned char>("a");
 
 	world.component<Sprite>()
-		.member<sf::Color>("color")
+		.member<Color>("color")
 		.add(flecs::With, world.component<Transform>());
 	world.component<Rectangle>().add(flecs::With, world.component<Transform>());
 	world.component<Circle>().add(flecs::With, world.component<Transform>());
+	world.component<Window>();
 
-	//world.add<RenderQueue>();
-
-	world.observer<Sprite>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Sprite& s) {
-			e.emplace<RenderFunc>([](sf::RenderWindow& window, flecs::entity e) {
-				auto s = e.get<Sprite>();
-				sf::Sprite sprite{ *s->texture };
-				sprite.setColor(s->color);
-				window.draw(sf::Sprite(sprite));
-			});
+	world.observer<Window>()
+		.event(flecs::OnSet)
+		.each([](Window& win) {
+			InitWindow(win.width, win.height, win.title.c_str());
 		});
 
-	world.observer<Rectangle>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Rectangle& r) {
-			e.emplace<RenderFunc>([](sf::RenderWindow& window, flecs::entity e) {
-				const auto r = e.get<Rectangle>();
-				window.draw(sf::RectangleShape(r->size));
-			});
+	world.observer<Window>()
+		.event(flecs::OnRemove)
+		.each([](Window& win) {
+			CloseWindow();
 		});
 
-	world.observer<Circle>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Circle& c) {
-			e.emplace<RenderFunc>([](sf::RenderWindow& window, flecs::entity e) {
-				const auto c = e.get<Circle>();
-				window.draw(sf::CircleShape(c->radius));
-			});
+	world.system<RenderQueue, GlobalTransform, Rect>()
+		.term_at(0).singleton()
+		.kind(Phases::Update)
+		.each([](RenderQueue& queue, GlobalTransform& t, Rect& r) {
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				RectRenderData{
+					.rec      = { t.translation.x, t.translation.y, r.size.x, r.size.y },
+					.rotation = 0.f, // TODO
+					.color    = r.color
+				}
+			);
 		});
 
-	//world.observer<Sprite>()
-	//	.event(flecs::OnSet)
-	//	.each([](flecs::entity e, Sprite& s) {
-	//		if (!s.texture) {
-	//			s.texture = std::make_shared<sf::Texture>();
-	//		}
-	//		if (!s.sprite) {
-	//			s.sprite = new sf::Sprite(*s.texture);
-	//		}
+	world.system<RenderQueue, GlobalTransform, Sprite>()
+		.term_at(0).singleton()
+		.kind(Phases::Update)
+		.each([](RenderQueue& queue, GlobalTransform& t, Sprite& s) {
+			const auto source = [s]() {
+				if (s.source) {
+					return s.source.value();
+				}
 
-	//		s.sprite->setColor(s.color);
+				return Rectangle{ 0.f, 0.f, static_cast<float>(s.texture->width), static_cast<float>(s.texture->height) };
+			}();
 
-	//		if (s.size) {
-	//			s.sprite->setTextureRect(sf::IntRect{{ 0, 0, }, { static_cast<int>(s.size.value().x), static_cast<int>(s.size.value().y) } } );
-	//		}
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				SpriteRenderData{
+					.texture  = *s.texture,
+					.source   = source,
+					.dest     = { t.translation.x, t.translation.y, source.width, source.height },
+					.rotation = 0.f, // TODO
+					.color    = s.color,
+				}
+			);
+		});
 
-	//		e.set<RenderItem>({ s.sprite, s.states });
-	//	});
+	world.system<RenderQueue, GlobalTransform, Circle>()
+		.term_at(0).singleton()
+		.kind(Phases::Update)
+		.each([](RenderQueue& queue, GlobalTransform& t, Circle& c) {
+			queue.renderCommands.emplace_back(
+				t.translation.z,
+				CircleRenderData{
+					.center = t.translation,
+					.radius = c.radius,
+					.color  = c.color,
+				}
+			);
+		});
 
-	//world.observer<Rectangle>()
-	//	.event(flecs::OnSet)
-	//	.each([](flecs::entity e, Rectangle& r) {
-	//		e.emplace<RenderItem>(new sf::RectangleShape(r.size));
-	//	});
-
-	//world.observer<Circle>()
-	//	.event(flecs::OnSet)
-	//	.each([](flecs::entity e, Circle& c) {
-	//		e.emplace<RenderItem>(new sf::CircleShape(c.radius));
-	//	});
-
-	//world.system<RenderQueue>()
-	//	.term_at(0).singleton()
-	//	.kind(Phases::PreUpdate)
-	//	.each([](RenderQueue& queue) {
-	//		queue.clear();
-	//	});
-
-	//world.system<RenderQueue, Sprite>()
-	//	.term_at(0).singleton()
-	//	.kind(Phases::PostUpdate)
-	//	.each([](flecs::entity e, RenderQueue& queue, Sprite& sprite) {
-	//		queue.emplace(e.depth(flecs::ChildOf), &sprite.sprite);
-	//	});
-
-	//world.system<RenderQueue, Rectangle>()
-	//	.term_at(0).singleton()
-	//	.kind(Phases::PostUpdate)
-	//	.each([](flecs::entity e, RenderQueue& queue, Rectangle& rect) {
-	//		queue.emplace(e.depth(flecs::ChildOf), &rect);
-	//	});
-
-	//world.system<RenderQueue, Circle>()
-	//	.term_at(0).singleton()
-	//	.kind(Phases::PostUpdate)
-	//	.each([](flecs::entity e, RenderQueue& queue, Circle& circle) {
-	//		queue.emplace(e.depth(flecs::ChildOf), &circle);
-	//	});
-
-	world.system<Application>()
+	world.system<Window>("BeginDrawing")
 		.term_at(0).singleton()
 		.kind(Phases::Clear)
-		.each([](Application& app) {
-			app.window.clear();
+		.each([](Window& w) {
+			BeginDrawing();
+			ClearBackground(BLACK);
 		});
 
-	//world.system<Application, const RenderItem, const GlobalTransform>()
-	//	.term_at(0).singleton()
-	//	.term_at(1).self().cascade().cached()
-	//	.kind(Phases::Render)
-	//	.order_by<GlobalTransform>([](flecs::entity_t e1, const GlobalTransform *t1, flecs::entity_t e2, const GlobalTransform *t2) {
-	//		return (t1->translation.z > t2->translation.z) - (t1->translation.z < t2->translation.z);
-	//	})
-	//	.each([](Application& app, const RenderItem& r, const GlobalTransform& t) {
-	//		app.window.draw(*r.item, r.states);
-	//	});
-
-
-	world.system<Application, const RenderFunc, const GlobalTransform>()
+	world.system<RenderQueue>("RenderSystem")
 		.term_at(0).singleton()
-		.term_at(2).self().cascade().cached()
 		.kind(Phases::Render)
-		.order_by<GlobalTransform>([](flecs::entity_t e1, const GlobalTransform *t1, flecs::entity_t e2, const GlobalTransform *t2) {
-			return (t1->translation.z > t2->translation.z) - (t1->translation.z < t2->translation.z);
-		})
-		.each([](flecs::entity e, Application& app, const RenderFunc& r, const GlobalTransform& t) {
-			r(app.window, e);
+		.each([](RenderQueue& queue) {
+			std::ranges::sort(queue.renderCommands, [](const RenderCommand& lhs, const RenderCommand& rhs) {
+				return lhs.sortIndex < rhs.sortIndex;
+			});
+
+			for (const auto& command : queue.renderCommands) {
+				std::visit(RenderCommandDispatcher{}, command.renderData);
+			}
+
+			queue.renderCommands.clear();
 		});
 
-	world.system<Application>()
+	world.system<Window>("EndDrawing")
 		.term_at(0).singleton()
 		.kind(Phases::Display)
-		.each([](Application& app) {
-			app.window.display();
+		.each([](Window& w) {
+			EndDrawing();
 		});
 
-	// Sandbox
-	auto e1 = world.entity()
-		.emplace<Sprite>(ResourceManager::getInstance()->getTexture("assets/main_menu.jpg"));
-
-	e1.get_ref<Transform>()->translation.z = 1.f;
-
-	auto e2 = world.entity()
-		.set<Circle>({300.f});
-
-	auto e3 = world.entity()
-		.set<Rectangle>({ sf::Vector2f{100.f, 100.f} });
-
-	e2.child_of(e1);
-
-	//auto e4 = world.entity()
-	//	.emplace<Sprite>(nullptr, sf::Color::Red, Vec2f{ 100.f, 100.f });
+	world.set<Window>({
+		"Plague: Survivors",
+		600, 600
+	});
 }

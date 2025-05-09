@@ -35,7 +35,7 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 			b2BodyDef bodyDef;
 			bodyDef.type          = r.Type == Rigidbody::BodyType::Dynamic ? b2BodyType::b2_dynamicBody : b2BodyType::b2_staticBody;
 			bodyDef.position      = t ? b2Vec2{ (t->translation.x + b.size.x / 2) / PPM, (t->translation.y + b.size.y / 2) / PPM } : b2Vec2{ b.size.x / 2 / PPM, b.size.y / 2 / PPM };
-			bodyDef.angle         = t ? t->rotation : 0;
+			//bodyDef.angle         = t ? t->rotation : 0;
 			bodyDef.fixedRotation = r.fixedRotation;
 
 			auto body = physics.CreateBody(&bodyDef);
@@ -70,6 +70,6 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 
 			t.translation.x = position.x * PPM - b.size.x / 2;
 			t.translation.y = position.y * PPM - b.size.y / 2;
-			t.rotation = body->GetAngle();
+			//t.rotation = body->GetAngle();
 		});
 }

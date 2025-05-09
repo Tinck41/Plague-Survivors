@@ -2,7 +2,7 @@
 
 using namespace ps;
 
-TextureHandle ResourceManager::getTexture(const std::string& path) {
+TextureHandle ResourceManager::getTexture(std::string path) {
 	if (m_loadedTextures.contains(path)) {
 		return m_loadedTextures.at(path);
 	}
@@ -16,12 +16,8 @@ TextureHandle ResourceManager::getTexture(const std::string& path) {
 	return nullptr;
 }
 
-TextureOpt ResourceManager::loadTexture(const std::string& path) {
-	auto texture = new Texture();
+TextureOpt ResourceManager::loadTexture(std::string path) {
+	auto texture = new Texture(LoadTexture(path.c_str()));
 
-	if (texture->loadFromFile(path)) {
-		return texture;
-	}
-
-	return nullptr;
+	return texture;
 }

@@ -1,52 +1,80 @@
 #pragma once
 
-#include "SFML/Graphics/CircleShape.hpp"
-#include "SFML/Graphics/Drawable.hpp"
-#include "SFML/Graphics/RectangleShape.hpp"
-#include "SFML/Graphics/RenderStates.hpp"
-#include "SFML/Graphics/RenderWindow.hpp"
-#include "SFML/Graphics/Shape.hpp"
-#include "SFML/Graphics/Texture.hpp"
-#include "SFML/Graphics/Sprite.hpp"
-#include "ecsModule/transformModule/module.h"
+#include "raylib.h"
 #include "flecs.h"
+#include "vec2.hpp"
+
 #include <functional>
-#include <map>
 #include <memory>
-#include <vector>
+
 
 namespace ps {
-	struct RenderItem {
-		sf::Drawable* item;
-		sf::RenderStates states = sf::RenderStates::Default;
+	struct Window {
+		std::string title;
+		int width;
+		int height;
 	};
 
-	//struct RenderQueue {
-	//	std::vector<sf::Drawable*> drawables;
-	//};
-	
-	using RenderQueue = std::multimap<int, sf::Drawable*>;
+	struct SpriteRenderData {
+		Texture2D texture;
+		Rectangle source;
+		Rectangle dest;
+		Vector2 origin;
+		float rotation;
+		Color color;
+	};
+
+	struct RectRenderData {
+		Rectangle rec;
+		float rotation;
+		Color color;
+	};
+
+	struct CircleRenderData {
+		glm::vec2 center;
+		float radius;
+		Color color;
+	};
+
+	using RenderData = std::variant<SpriteRenderData, RectRenderData, CircleRenderData>;
+
+	struct RenderCommand {
+		int sortIndex;
+		RenderData renderData;
+	};
+
+	struct RenderCommandDispatcher {
+		void operator()(const SpriteRenderData& data) {
+			DrawTexturePro(data.texture, data.source, data.dest, data.origin, data.rotation, data.color);
+		}
+		void operator()(const RectRenderData& data) {
+			DrawRectanglePro(data.rec, {}, data.rotation, data.color);
+		}
+		void operator()(const CircleRenderData& data) {
+			DrawCircle(data.center.x, data.center.y, data.radius, data.color);
+		}
+	};
+
+	struct RenderQueue {
+		std::vector<RenderCommand> renderCommands;
+	};
 
 	struct Sprite {
-		std::shared_ptr<sf::Texture> texture;
-		sf::Color color = sf::Color::White;
-		std::optional<Vec2f> size;
-		sf::Sprite* sprite;
-		sf::RenderStates states = sf::RenderStates::Default;
-	};
-
-	using RenderFunc = std::function<void(sf::RenderWindow& window, flecs::entity e)>;
-
-	struct Rectangle {
-		sf::Vector2f size;
+		std::shared_ptr<Texture2D> texture;
+		Color color = WHITE;
+		std::optional<Rectangle> source;
+		Vector2 origin;
 	};
 
 	struct Circle {
 		float radius;
+		Color color = WHITE;
 	};
 
-	//using Rectangle = sf::RectangleShape;
-	//using Circle = sf::CircleShape;
+	struct Rect {
+		glm::vec2 size;
+		Color color = WHITE;
+	};
 
 	struct RenderModule {
 		RenderModule(flecs::world& world);

@@ -23,19 +23,19 @@ int main() {
 	//world.import<ps::SceneModule>();
 	world.import<ps::TimeModule>();
 	world.import<ps::TransformModule>();
-	world.import<ps::InputModule>();
-	//world.import<ps::UiModule>();
-	world.import<ps::PhysicsModule>();
-	world.import<ps::CameraModule>();
-	world.import<ps::SpriteModule>();
+	//world.import<ps::InputModule>();
+	world.import<ps::UiModule>();
+	//world.import<ps::PhysicsModule>();
+	//world.import<ps::CameraModule>();
+	//world.import<ps::SpriteModule>();
 	//world.import<ps::PlayerModule>();
+	world.import<flecs::stats>();
 
 	world.set<flecs::Rest>({});
 
-	world.app().enable_rest().run();
+	world.script().filename("assets/scripts/mainMenu.flecs").run();
 
-	//const auto *app = world.get<ps::Application>();
-	//while(app->window.isOpen()) {
-	//	world.progress(world.get<ps::Time>()->deltaTime);
-	//}
+	while(!WindowShouldClose()) {
+		world.progress(GetFrameTime());
+	}
 }

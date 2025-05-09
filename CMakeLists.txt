@@ -5,18 +5,26 @@ project(Plague-Survivors LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(APPLE)
+	enable_language(OBJC)
+endif()
+
 set(SFML_STATIC_LIBRARIES TRUE)
 set(BOX2D_BUILD_UNIT_TESTS FALSE)
 set(BOX2D_BUILD_TESTBED FALSE)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/raylib)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SFML)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/flecs)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/box2d)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/spdlog)
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glm)
 
 include_directories(${CMAKE_SOURCE_DIR}/vendor/SFML/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/box2d/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
+include_directories(${CMAKE_SOURCE_DIR}/vendor/glm)
+#include_directories(${CMAKE_SOURCE_DIR}/vendor/raylib/src)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_executable(${PROJECT_NAME} 
@@ -52,10 +60,12 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/renderModule/module.cpp
 )
 
+target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-window sfml-system)
 target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)
 target_link_libraries(${PROJECT_NAME} PRIVATE box2d)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
+target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )
