@@ -5,17 +5,23 @@
 
 #include <unordered_map>
 #include <string>
+#include <expected>
 
 namespace ps {
-	using TextureOpt = Texture*;
+	enum class TextureLoadError {
+		TextureNotFound,
+	};
+
 	using TextureHandle = std::shared_ptr<Texture>;
 
 	class ResourceManager : public utils::InstanceBase<ResourceManager> {
 	public:
-		TextureHandle getTexture(std::string path);
+		TextureHandle getTexture(const std::string& path);
 
-		TextureOpt loadTexture(std::string path);
+		std::expected<Texture, TextureLoadError> loadTexture(const std::string& path);
 	private:
 		std::unordered_map<std::string, TextureHandle> m_loadedTextures;
 	};
+
+	// TODO: unload texture
 }

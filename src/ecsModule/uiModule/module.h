@@ -6,6 +6,9 @@
 
 #include <string>
 #include <vector>
+#include <variant>
+#include <optional>
+#include <memory>
 
 namespace ps {
 	inline static constexpr const char* UI_ROO_ID = "uiRoot";
@@ -93,7 +96,7 @@ namespace ps {
 
 	struct Image {
 		std::string path;
-		Texture2D texture;
+		std::shared_ptr<Texture> texture;
 		std::optional<Rectangle> part;
 	};
 

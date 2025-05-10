@@ -4,7 +4,6 @@
 #include "ecsModule/physicsModule/module.h"
 #include "ecsModule/timeModule/module.h"
 #include "ecsModule/inputModule/module.h"
-#include "ecsModule/spriteModule/module.h"
 #include "ecsModule/playerModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/appModule/module.h"
@@ -25,15 +24,15 @@ int main() {
 	world.import<ps::TransformModule>();
 	world.import<ps::InputModule>();
 	world.import<ps::UiModule>();
-	//world.import<ps::PhysicsModule>();
+	world.import<ps::PhysicsModule>();
 	world.import<ps::CameraModule>();
-	//world.import<ps::SpriteModule>();
-	//world.import<ps::PlayerModule>();
+	world.import<ps::PlayerModule>();
 	world.import<flecs::stats>();
 
 	world.set<flecs::Rest>({});
 
 	world.script().filename("assets/scripts/mainMenu.flecs").run();
+	//world.script().filename("assets/scripts/gameScene.flecs").run();
 
 	while(!WindowShouldClose()) {
 		world.progress(GetFrameTime());

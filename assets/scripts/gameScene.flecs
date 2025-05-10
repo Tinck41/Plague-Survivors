@@ -1,0 +1,62 @@
+using ps.PlayerModule
+using ps.TransformModule
+using ps.PhysicsModule
+using ps.RenderModule
+using ps.CameraModule
+
+player {
+	Player
+	Transform: {
+		translation: { 50, 50, 0 }
+	}
+	Velocity: { 300, 300 }
+	Rect: {
+		size: { 50, 50 },
+		color: { 0, 255, 0, 255 }
+	}
+	BoxCollider: {
+		size: { 50, 50 }
+	}
+	Rigidbody: {
+		type: Dynamic
+	}
+}
+
+obstacle1 {
+	Transform: {
+		translation: { 300, 300, 0 }
+	}
+	Rect: {
+		size: { 150, 150 },
+		color: { 255, 0, 0, 255 }
+	}
+	BoxCollider: {
+		size: { 150, 150 }
+	}
+	Rigidbody: {
+		type: Static
+	}
+}
+
+obstacle2 {
+	Transform: {
+		translation: { 600, 50, 0 }
+	}
+	Rect: {
+		size: { 50, 50 },
+		color: { 255, 0, 0, 255 }
+	}
+	BoxCollider: {
+		size: { 50, 50 }
+	}
+	Rigidbody: {
+		type: Static
+	}
+}
+
+$ {
+	Camera: {
+		target: player,
+		offset: { -25, -25 }
+	}
+}

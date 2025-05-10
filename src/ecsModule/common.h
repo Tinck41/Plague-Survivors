@@ -1,7 +1,5 @@
 #pragma once
 
-#include "SFML/System/Vector2.hpp"
-
 namespace ps {
 	enum class Phases {
 		OnStart,
@@ -10,7 +8,9 @@ namespace ps {
 		Update,
 		PostUpdate,
 		Clear,
+		PreRender,
 		Render,
+		PostRender,
 		RenderUI,
 		Display,
 	};

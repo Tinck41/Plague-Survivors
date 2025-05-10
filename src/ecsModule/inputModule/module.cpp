@@ -6,6 +6,80 @@
 
 using namespace ps;
 
+int PsKeyToRaylibKey(Key key) {
+	switch(key) {
+		case Key::Space:      return KEY_SPACE;
+		case Key::Apostrophe: return KEY_APOSTROPHE;
+		case Key::Comma:      return KEY_COMMA;
+		//case Key::Hyphen:   return KEY_HYPHEN;
+		case Key::Period:     return KEY_PERIOD;
+		case Key::Slash:      return KEY_SLASH;
+		case Key::Num0:       return KEY_KP_0;
+		case Key::Num1:       return KEY_KP_1;
+		case Key::Num2:       return KEY_KP_2;
+		case Key::Num3:       return KEY_KP_3;
+		case Key::Num4:       return KEY_KP_4;
+		case Key::Num5:       return KEY_KP_5;
+		case Key::Num6:       return KEY_KP_6;
+		case Key::Num7:       return KEY_KP_7;
+		case Key::Num8:       return KEY_KP_8;
+		case Key::Num9:       return KEY_KP_9;
+		case Key::Semicolon:  return KEY_SEMICOLON;
+		case Key::Equal:      return KEY_EQUAL;
+		case Key::A:          return KEY_A;
+		case Key::B:          return KEY_B;
+		case Key::C:          return KEY_C;
+		case Key::D:          return KEY_D;
+		case Key::E:          return KEY_E;
+		case Key::F:          return KEY_F;
+		case Key::G:          return KEY_G;
+		case Key::H:          return KEY_H;
+		case Key::I:          return KEY_I;
+		case Key::J:          return KEY_J;
+		case Key::K:          return KEY_K;
+		case Key::L:          return KEY_L;
+		case Key::M:          return KEY_M;
+		case Key::N:          return KEY_N;
+		case Key::O:          return KEY_O;
+		case Key::P:          return KEY_P;
+		case Key::Q:          return KEY_Q;
+		case Key::R:          return KEY_R;
+		case Key::S:          return KEY_S;
+		case Key::T:          return KEY_T;
+		case Key::U:          return KEY_U;
+		case Key::V:          return KEY_V;
+		case Key::W:          return KEY_W;
+		case Key::X:          return KEY_X;
+		case Key::Y:          return KEY_Y;
+		case Key::Z:          return KEY_Z;
+		case Key::LBracket:   return KEY_LEFT_BRACKET;
+		case Key::Backslash:  return KEY_BACKSLASH;
+		case Key::RBracket:   return KEY_RIGHT_BRACKET;
+		case Key::Grave:      return KEY_GRAVE;
+		case Key::Escape:     return KEY_ESCAPE;
+		case Key::Enter:      return KEY_ENTER;
+		case Key::Tab:        return KEY_TAB;
+		case Key::Backspace:  return KEY_BACKSPACE;
+		case Key::Insert:     return KEY_INSERT;
+		case Key::Delete:     return KEY_DELETE;
+		case Key::Right:      return KEY_RIGHT;
+		case Key::Left:       return KEY_LEFT;
+		case Key::Down:       return KEY_DOWN;
+		case Key::Up:         return KEY_UP;
+		case Key::PageUp:     return KEY_PAGE_UP;
+		case Key::PageDown:   return KEY_PAGE_DOWN;
+		case Key::Home:       return KEY_HOME;
+		case Key::End:        return KEY_END;
+		case Key::LShift:     return KEY_LEFT_SHIFT;
+		case Key::LControl:   return KEY_LEFT_CONTROL;
+		case Key::LAlt:       return KEY_LEFT_ALT;
+		case Key::RShift:     return KEY_RIGHT_SHIFT;
+		case Key::RControl:   return KEY_RIGHT_CONTROL;
+		case Key::RAlt:       return KEY_RIGHT_ALT;
+		default:              return KEY_NULL;
+	}
+}
+
 Key RaylibKeyToPsKey(int key) {
 	switch(key) {
 		case KEY_SPACE:         return Key::Space;
@@ -107,9 +181,10 @@ InputModule::InputModule(flecs::world& world) {
 		.kind(Phases::HandleInput)
 		.term_at(0).singleton()
 		.each([](Input& i) {
-			for (auto& [_, state] : i.keys) {
+			for (auto& [key, state] : i.keys) {
 				state.pressed = false;
 				state.released = false;
+				state.remain &= !IsKeyReleased(PsKeyToRaylibKey(key));
 			}
 
 			i.mouse.left.pressed = false;
@@ -119,20 +194,12 @@ InputModule::InputModule(flecs::world& world) {
 			i.mouse.moved = false;
 
 			while (const auto key = GetKeyPressed()) {
-				if (IsKeyPressed(key)) {
-					const auto psKey = RaylibKeyToPsKey(key);
+				const auto psKey = RaylibKeyToPsKey(key);
 
-					if (!i.keys[psKey].remain) {
-						i.keys[psKey].pressed = true;
-						i.keys[psKey].remain = true;
-					}
-				} else if(IsKeyReleased(key)) {
-					const auto psKey = RaylibKeyToPsKey(key);
-
-					i.keys[psKey].pressed = false;
-					i.keys[psKey].remain = false;
-					i.keys[psKey].released = true;
-				} 
+				if (!i.keys[psKey].remain) {
+					i.keys[psKey].pressed = true;
+					i.keys[psKey].remain = true;
+				}
 			}
 
 			const auto newPos = GetMousePosition();
