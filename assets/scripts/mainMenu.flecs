@@ -1,5 +1,6 @@
 using ps.UiModule
 using ps.TransformModule
+using ps.CameraModule
 
 ps.UiModule.uiRoot {
 	canvas {

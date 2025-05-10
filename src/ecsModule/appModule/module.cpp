@@ -40,13 +40,21 @@ AppModule::AppModule(flecs::world& world) {
 		.add(flecs::Phase)
 		.depends_on(Phases::PostUpdate);
 
-	world.entity(Phases::Render)
+	world.entity(Phases::PreRender)
 		.add(flecs::Phase)
 		.depends_on(Phases::Clear);
 
-	world.entity(Phases::RenderUI)
+	world.entity(Phases::Render)
+		.add(flecs::Phase)
+		.depends_on(Phases::PreRender);
+
+	world.entity(Phases::PostRender)
 		.add(flecs::Phase)
 		.depends_on(Phases::Render);
+
+	world.entity(Phases::RenderUI)
+		.add(flecs::Phase)
+		.depends_on(Phases::PostRender);
 
 	world.entity(Phases::Display)
 		.add(flecs::Phase)
@@ -62,6 +70,8 @@ AppModule::AppModule(flecs::world& world) {
 			SetTargetFPS(app.targetFPS);
 		});
 
-	world.set<Application>({});
+	world.set<Application>({
+		.isVSyncEnabled = true
+	});
 
 }

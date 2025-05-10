@@ -5,6 +5,8 @@
 #include "raylib.h"
 #include "resourceManager.h"
 
+#include <algorithm>
+
 using namespace ps;
 
 RenderModule::RenderModule(flecs::world& world) {
@@ -15,7 +17,7 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<Sprite>()
 		.member<Color>("color")
 		.add(flecs::With, world.component<Transform>());
-	world.component<Rectangle>().add(flecs::With, world.component<Transform>());
+	world.component<Rect>().add(flecs::With, world.component<Transform>());
 	world.component<Circle>().add(flecs::With, world.component<Transform>());
 	world.component<Window>();
 
@@ -29,6 +31,10 @@ RenderModule::RenderModule(flecs::world& world) {
 		.member<std::string>("title")
 		.member<int>("width")
 		.member<int>("height");
+
+	world.component<Rect>()
+		.member<glm::vec2>("size")
+		.member<Color>("color");
 
 	world.observer<Window>()
 		.event(flecs::OnAdd)
@@ -124,6 +130,7 @@ RenderModule::RenderModule(flecs::world& world) {
 			EndDrawing();
 		});
 
+	world.set<RenderQueue>({});
 	world.set<Window>({
 		"Plague: Survivors",
 		600, 600

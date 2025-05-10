@@ -6,7 +6,9 @@
 #include "raylib.h"
 #include "ext/matrix_transform.hpp"
 #include "gtc/quaternion.hpp"
+#include "resourceManager.h"
 
+#include <algorithm>
 #include <functional>
 
 using namespace ps;
@@ -102,15 +104,12 @@ UiModule::UiModule(flecs::world& world) {
 		.member<Color>("hoverColor")
 		.member<Color>("clickColor");
 
-	world.add<UiRenderQueue>();
-
 	auto root = world.entity(UI_ROO_ID).add<RootNode>().add(flecs::OrderedChildren);
 
 	world.observer<Image>()
-		.event(flecs::OnAdd)
 		.event(flecs::OnSet)
 		.each([](Image& i) {
-			i.texture = LoadTexture(i.path.c_str());
+			i.texture = ResourceManager::getInstance()->getTexture(i.path);
 		});
 
 	world.observer<Node>()
@@ -134,7 +133,7 @@ UiModule::UiModule(flecs::world& world) {
 		.with<Dirty>()
 		.kind(Phases::Update)
 		.each([](Node& n, GlobalTransform& t, Image& i) {
-			n.size = glm::vec2{ i.texture. width, i.texture.height } * glm::vec2{ t.scale };
+			n.size = glm::vec2{ i.texture->width, i.texture->height } * glm::vec2{ t.scale };
 		});
 
 	world.system<Node, GlobalTransform, Text>()
@@ -252,13 +251,13 @@ UiModule::UiModule(flecs::world& world) {
 					return i.part.value();
 				}
 
-				return Rectangle{ 0.f, 0.f, static_cast<float>(i.texture.width), static_cast<float>(i.texture.height) };
+				return Rectangle{ 0.f, 0.f, static_cast<float>(i.texture->width), static_cast<float>(i.texture->height) };
 			}();
 
 			queue.renderCommands.emplace_back(
 				t.translation.z,
 				ImageRenderData{
-					.texture  = i.texture,
+					.texture  = *i.texture,
 					.source   = source,
 					.dest     = { n.pos.x, n.pos.y, n.size.x, n.size.y },
 					.rotation = 0.f, // TODO
@@ -301,6 +300,7 @@ UiModule::UiModule(flecs::world& world) {
 			queue.renderCommands.clear();
 		});
 
+	world.add<UiRenderQueue>();
 	root.set<Node>({
 		.pos{ 0, 0 },
 		.size{ 600, 600 }

@@ -1,9 +1,16 @@
 #pragma once
 
+#include "box2d/id.h"
 #include "vec2.hpp"
 #include "flecs.h"
 
 namespace ps {
+	struct Physics {
+		b2WorldId worldId{ b2_nullWorldId };
+		glm::vec2 gravity{ 0.f, 0.f };
+		int subStepCount{ 4 };
+	};
+
 	struct Rigidbody {
 		enum class BodyType { 
 			Static = 0,
@@ -11,10 +18,10 @@ namespace ps {
 			Kinematic,
 		};
 
-		BodyType Type = BodyType::Static;
+		BodyType type = BodyType::Static;
 		bool fixedRotation = true;
 
-		void* body = nullptr;
+		b2BodyId bodyId;
 	};
 
 	struct BoxCollider {
@@ -25,11 +32,20 @@ namespace ps {
 		float friction = 0.f;
 		float restitution = 0.f;
 		float restitutionThreshold = 0.f;
-
-		void* fixture = nullptr;
 	};
 
-	using Velocity = glm::vec2;
+	struct Velocity {
+		Velocity() = default;
+		Velocity(glm::vec2 vec) : x(vec.x), y(vec.y) {}
+		Velocity(float x, float y) : x(x), y(y) {}
+
+		operator glm::vec2 () const {
+			return { x, y };
+		}
+
+		float x;
+		float y;
+	};
 
 	struct PhysicsModule {
 		PhysicsModule(flecs::world& world);

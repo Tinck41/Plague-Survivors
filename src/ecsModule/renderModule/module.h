@@ -4,9 +4,11 @@
 #include "flecs.h"
 #include "vec2.hpp"
 
-#include <functional>
 #include <memory>
-
+#include <variant>
+#include <optional>
+#include <vector>
+#include <string>
 
 namespace ps {
 	struct Window {
