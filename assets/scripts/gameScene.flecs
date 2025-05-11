@@ -9,7 +9,8 @@ player {
 	Transform: {
 		translation: { 50, 50, 0 }
 	}
-	Velocity: { 300, 300 }
+	(ePlayerState, Idle)
+	Velocity: { 500, 500 }
 	Rect: {
 		size: { 50, 50 },
 		color: { 0, 255, 0, 255 }

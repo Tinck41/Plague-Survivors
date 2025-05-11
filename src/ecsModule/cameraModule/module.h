@@ -11,10 +11,7 @@ namespace ps {
 
 	struct Camera {
 		flecs::entity_t target;
-		glm::vec2 center;
 		glm::vec2 offset;
-		float rotation;
-		float zoom = 1.f;
 	};
 
 	struct CameraModule {

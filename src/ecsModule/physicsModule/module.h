@@ -34,17 +34,27 @@ namespace ps {
 		float restitutionThreshold = 0.f;
 	};
 
-	struct Velocity {
+	struct Velocity : public glm::vec<2, float, glm::defaultp> {
 		Velocity() = default;
-		Velocity(glm::vec2 vec) : x(vec.x), y(vec.y) {}
-		Velocity(float x, float y) : x(x), y(y) {}
-
-		operator glm::vec2 () const {
-			return { x, y };
+		Velocity(float x, float y) {
+			this->x = x;
+			this->y = y;
 		}
-
-		float x;
-		float y;
+		Velocity(glm::vec2 vec) {
+			this->x = vec.x;
+			this->y = vec.y;
+		}
+	};
+	struct Direction : public glm::vec<2, float, glm::defaultp> {
+		Direction() = default;
+		Direction(float x, float y) {
+			this->x = x;
+			this->y = y;
+		}
+		Direction(glm::vec2 vec) {
+			this->x = vec.x;
+			this->y = vec.y;
+		}
 	};
 
 	struct PhysicsModule {

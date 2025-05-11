@@ -56,6 +56,10 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 		.member<float>("x")
 		.member<float>("y");
 
+	world.component<Direction>()
+		.member<float>("x")
+		.member<float>("y");
+
 	world.observer<Physics>()
 		.event(flecs::OnAdd)
 		.each([](Physics& p) {
@@ -108,10 +112,10 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 			b2CreatePolygonShape(r.bodyId, &shapeDef, &polygon);
 		});
 
-	world.system<Velocity, Rigidbody>()
+	world.system<Direction, Velocity, Rigidbody>()
 		.kind(Phases::Update)
-		.each([](Velocity& v, Rigidbody& r) {
-			b2Body_SetLinearVelocity(r.bodyId, { v.x / PPM, v.y / PPM });
+		.each([](Direction& d, Velocity& v, Rigidbody& r) {
+			b2Body_SetLinearVelocity(r.bodyId, { d.x * v.x / PPM, d.y * v.y / PPM });
 		});
 
 	world.system<Transform, const Rigidbody, const BoxCollider>()
