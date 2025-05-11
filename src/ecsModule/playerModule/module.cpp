@@ -3,6 +3,7 @@
 #include "ecsModule/inputModule/module.h"
 #include "ecsModule/physicsModule/module.h"
 #include "ecsModule/renderModule/module.h"
+#include "ecsModule/timeModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/common.h"
@@ -18,33 +19,78 @@ PlayerModule::PlayerModule(flecs::world& world) {
 	world.import<RenderModule>();
 	world.import<CameraModule>();
 
-	world.component<Player>().add(flecs::Exclusive);
+	world.component<ePlayerState>().add(flecs::Union);
+	world.component<Dash>();
+	world.component<Player>()
+		.add(flecs::With, world.component<Direction>())
+		.add(flecs::With, world.component<Velocity>())
+		.add(flecs::Exclusive);
 
-	world.system<Input, Velocity, Player>()
-		.kind(Phases::Update)
+	world.component<ePlayerState>()
+		.constant("Idle", ePlayerState::Idle)
+		.constant("Dashing", ePlayerState::Dashing);
+
+	world.observer<Dash, Velocity>()
+		.with<Velocity>().filter()
+		.event(flecs::OnSet)
+		.each([](flecs::entity e, Dash& d, Velocity& v) {
+			const auto speed = d.distance / d.duration;
+
+			d.startVelocity = v;
+			v.x = speed;
+			v.y = speed;
+
+			e.add(ePlayerState::Dashing);
+		});
+
+	world.observer<Dash, Velocity>()
+		.with<Velocity>().filter()
+		.event(flecs::OnRemove)
+		.each([](flecs::entity e, Dash& d, Velocity& v) {
+			v = d.startVelocity;
+
+			e.add(ePlayerState::Idle);
+		});
+
+	world.system<Input, Velocity, Direction, Player>()
 		.term_at(0).singleton()
-		.each([](flecs::entity entity, Input& i, Velocity& v, const Player& p) {
-			glm::vec2 direction { 0.f, 0.f };
+		.without(ePlayerState::Dashing)
+		.kind(Phases::Update)
+		.each([](flecs::entity e, Input& i, Velocity& v, Direction& d, const Player& p) {
+			d = { 0.f, 0.f };
 
 			if (i.keys[Key::A].remain) {
-				direction.x = -1.f;
+				d.x = -1.f;
 			}
 			if (i.keys[Key::D].remain) {
-				direction.x = 1.f;
+				d.x = 1.f;
 			}
 			if (i.keys[Key::W].remain) {
-				direction.y = -1.f;
+				d.y = -1.f;
 			}
 			if (i.keys[Key::S].remain) {
-				direction.y = 1.f;
+				d.y = 1.f;
 			}
 
-			auto normalized = direction;
-			if (direction.x != 0 || direction.y != 0) {
-				normalized = glm::normalize(direction);
+			if (i.keys[Key::Space].pressed) {
+				e.set<Dash>({
+					.distance = 300.f,
+					.duration = .1f
+				});
 			}
 
-			constexpr auto speed = 700.f;
-			v = glm::vec2{ speed * normalized.x, speed * normalized.y };
+			if (d.x != 0 || d.y != 0) {
+				d = glm::normalize(d);
+			}
+		});
+
+	world.system<Time, Dash>()
+		.term_at(0).singleton()
+		.each([](flecs::entity e, Time& t, Dash& d) {
+			d.timer += t.deltaTime;
+
+			if (d.timer >= d.duration) {
+				e.remove<Dash>();
+			}
 		});
 }

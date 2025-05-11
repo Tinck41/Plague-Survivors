@@ -31,8 +31,8 @@ int main() {
 
 	world.set<flecs::Rest>({});
 
-	world.script().filename("assets/scripts/mainMenu.flecs").run();
-	//world.script().filename("assets/scripts/gameScene.flecs").run();
+	//world.script().filename("assets/scripts/mainMenu.flecs").run();
+	world.script().filename("assets/scripts/gameScene.flecs").run();
 
 	while(!WindowShouldClose()) {
 		world.progress(GetFrameTime());

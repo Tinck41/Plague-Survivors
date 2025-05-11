@@ -33,28 +33,26 @@ CameraModule::CameraModule(flecs::world& world) {
 		.depends_on(Phases::Render);
 
 	world.component<Camera>()
+		.add(flecs::With, world.component<Transform>())
 		.add(flecs::Exclusive);
 
 	world.component<Camera>()
 		.member<flecs::entity_t>("target")
-		.member<glm::vec2>("center")
-		.member<glm::vec2>("offset")
-		.member<float>("rotation")
-		.member<float>("zoom");
+		.member<glm::vec2>("offset");
 
-	world.system<Window, Time, Camera, Velocity>()
+	world.system<Window, Time, Camera, Transform, Velocity>()
 		.term_at(0).singleton()
 		.term_at(1).singleton()
 		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t size, Window& w, Time& t, Camera& c, Velocity& v) {
+		.each([](flecs::iter& it, size_t size, Window& w, Time& time, Camera& c, Transform& t, Velocity& v) {
 			const auto position = c.target != flecs::entity::null() ? it.world().entity(c.target).get<GlobalTransform>()->translation : glm::vec3{ 0.f };
 
-			c.center.x = std::floor(lerp(c.center.x, position.x, v.x * t.deltaTime));
-			c.center.y = std::floor(lerp(c.center.y, position.y, v.y * t.deltaTime));
+			t.translation.x = std::floor(lerp(t.translation.x, position.x, v.x * time.deltaTime));
+			t.translation.y = std::floor(lerp(t.translation.y, position.y, v.y * time.deltaTime));
 
-			g_camera.target   = Vector2{ c.center.x, c.center.y };
-			g_camera.rotation = c.rotation;
-			g_camera.zoom     = c.zoom;
+			g_camera.target   = Vector2{ t.translation.x, t.translation.y };
+			//g_camera.rotation = t.rotation;
+			g_camera.zoom     = t.scale.x;
 			g_camera.offset   = Vector2{ c.offset.x + w.width * 0.5f, c.offset.y + w.height * 0.5f };
 		});
 
