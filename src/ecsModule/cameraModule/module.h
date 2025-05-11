@@ -10,11 +10,12 @@ namespace ps {
 	};
 
 	struct Camera {
-		flecs::entity_t target;
 		glm::vec2 offset;
 	};
 
 	struct CameraModule {
 		CameraModule(flecs::world& world);
+
+		inline static flecs::entity_t EcsCamera;
 	};
 }

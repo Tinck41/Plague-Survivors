@@ -8,10 +8,13 @@ namespace ps {
 
 	enum class ePlayerState {
 		Idle,
+		Moving,
 		Dashing,
 	};
 
-	struct Dash {
+	struct CameraTarget {};
+
+	struct DashData {
 		float distance;
 		float duration;
 
