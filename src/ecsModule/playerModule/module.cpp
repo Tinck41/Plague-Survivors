@@ -7,6 +7,12 @@
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/common.h"
+#include "raylib.h"
+#include "spdlog/spdlog.h"
+
+#include "gtx/compatibility.hpp"
+
+#include <random>
 
 using namespace ps;
 
@@ -20,7 +26,8 @@ PlayerModule::PlayerModule(flecs::world& world) {
 	world.import<CameraModule>();
 
 	world.component<ePlayerState>().add(flecs::Union);
-	world.component<Dash>();
+	world.component<DashData>();
+	world.component<CameraTarget>().add(flecs::Exclusive);
 	world.component<Player>()
 		.add(flecs::With, world.component<Direction>())
 		.add(flecs::With, world.component<Velocity>())
@@ -28,12 +35,13 @@ PlayerModule::PlayerModule(flecs::world& world) {
 
 	world.component<ePlayerState>()
 		.constant("Idle", ePlayerState::Idle)
+		.constant("Moving", ePlayerState::Moving)
 		.constant("Dashing", ePlayerState::Dashing);
 
-	world.observer<Dash, Velocity>()
+	world.observer<DashData, Velocity>()
 		.with<Velocity>().filter()
 		.event(flecs::OnSet)
-		.each([](flecs::entity e, Dash& d, Velocity& v) {
+		.each([](flecs::entity e, DashData& d, Velocity& v) {
 			const auto speed = d.distance / d.duration;
 
 			d.startVelocity = v;
@@ -43,10 +51,10 @@ PlayerModule::PlayerModule(flecs::world& world) {
 			e.add(ePlayerState::Dashing);
 		});
 
-	world.observer<Dash, Velocity>()
+	world.observer<DashData, Velocity>()
 		.with<Velocity>().filter()
 		.event(flecs::OnRemove)
-		.each([](flecs::entity e, Dash& d, Velocity& v) {
+		.each([](flecs::entity e, DashData& d, Velocity& v) {
 			v = d.startVelocity;
 
 			e.add(ePlayerState::Idle);
@@ -73,7 +81,7 @@ PlayerModule::PlayerModule(flecs::world& world) {
 			}
 
 			if (i.keys[Key::Space].pressed) {
-				e.set<Dash>({
+				e.set<DashData>({
 					.distance = 300.f,
 					.duration = .1f
 				});
@@ -81,16 +89,31 @@ PlayerModule::PlayerModule(flecs::world& world) {
 
 			if (d.x != 0 || d.y != 0) {
 				d = glm::normalize(d);
+
+				e.add(ePlayerState::Moving);
+			} else {
+				e.add(ePlayerState::Idle);
 			}
 		});
 
-	world.system<Time, Dash>()
+	world.system<Time, DashData>()
 		.term_at(0).singleton()
-		.each([](flecs::entity e, Time& t, Dash& d) {
+		.kind(Phases::Update)
+		.each([](flecs::entity e, Time& t, DashData& d) {
 			d.timer += t.deltaTime;
 
 			if (d.timer >= d.duration) {
-				e.remove<Dash>();
+				e.remove<DashData>();
 			}
+		});
+
+	world.system<const Time, Transform, const Velocity, const Transform>()
+		.term_at(0).singleton()
+		.term_at(1).src(CameraModule::EcsCamera)
+		.term_at(2).src(CameraModule::EcsCamera)
+		.with<CameraTarget>()
+		.kind(Phases::Update)
+		.each([](const Time& time, Transform& ct, const Velocity& cv, const Transform& t) {
+			ct.translation = glm::lerp(ct.translation, t.translation, cv.x * time.deltaTime);
 		});
 }

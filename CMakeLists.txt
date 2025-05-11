@@ -12,6 +12,8 @@ endif()
 set(BOX2D_BUILD_UNIT_TESTS FALSE)
 set(BOX2D_BUILD_TESTBED FALSE)
 
+add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/raylib)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/flecs)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/box2d)

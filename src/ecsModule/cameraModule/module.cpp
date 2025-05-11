@@ -7,12 +7,9 @@
 #include "ecsModule/transformModule/module.h"
 
 #include "raylib.h"
+#include <iostream>
 
 using namespace ps;
-
-float lerp(float v0, float v1, float t) {
-	return v0 * (1 - t) + v1 * t;
-}
 
 Camera2D g_camera{ 0 };
 
@@ -34,26 +31,19 @@ CameraModule::CameraModule(flecs::world& world) {
 
 	world.component<Camera>()
 		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<Velocity>())
 		.add(flecs::Exclusive);
 
 	world.component<Camera>()
-		.member<flecs::entity_t>("target")
 		.member<glm::vec2>("offset");
 
-	world.system<Window, Time, Camera, Transform, Velocity>()
+	world.system<Window, Camera, Transform>()
 		.term_at(0).singleton()
-		.term_at(1).singleton()
 		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t size, Window& w, Time& time, Camera& c, Transform& t, Velocity& v) {
-			const auto position = c.target != flecs::entity::null() ? it.world().entity(c.target).get<GlobalTransform>()->translation : glm::vec3{ 0.f };
-
-			t.translation.x = std::floor(lerp(t.translation.x, position.x, v.x * time.deltaTime));
-			t.translation.y = std::floor(lerp(t.translation.y, position.y, v.y * time.deltaTime));
-
-			g_camera.target   = Vector2{ t.translation.x, t.translation.y };
-			//g_camera.rotation = t.rotation;
-			g_camera.zoom     = t.scale.x;
-			g_camera.offset   = Vector2{ c.offset.x + w.width * 0.5f, c.offset.y + w.height * 0.5f };
+		.each([](Window& w, Camera& c, Transform& t) {
+			g_camera.target = Vector2{ t.translation.x, t.translation.y };
+			g_camera.zoom   = t.scale.x;
+			g_camera.offset = Vector2{ c.offset.x + w.width * 0.5f, c.offset.y + w.height * 0.5f };
 		});
 
 	world.system<Camera>()
@@ -68,6 +58,5 @@ CameraModule::CameraModule(flecs::world& world) {
 			EndMode2D();
 		});
 
-	world.set<Camera>({});
-	world.singleton<Camera>().set(Velocity{ 7.f, 7.f });
+	EcsCamera = world.entity("EcsCamera");
 }

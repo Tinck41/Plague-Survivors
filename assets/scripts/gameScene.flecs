@@ -5,6 +5,7 @@ using ps.RenderModule
 using ps.CameraModule
 
 player {
+	CameraTarget
 	Player
 	Transform: {
 		translation: { 50, 50, 0 }
@@ -55,9 +56,7 @@ obstacle2 {
 	}
 }
 
-$ {
-	Camera: {
-		target: player,
-		offset: { -25, -25 }
-	}
+ps.CameraModule.EcsCamera {
+	Camera
+	Velocity: { 7, 7 }
 }
