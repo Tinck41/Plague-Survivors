@@ -3,12 +3,13 @@ using ps.TransformModule
 using ps.PhysicsModule
 using ps.RenderModule
 using ps.CameraModule
+using ps.TweenModule
 
 player {
 	CameraTarget
 	Player
 	Transform: {
-		translation: { 50, 50, 0 }
+		translation: { 250, 250, 0 }
 	}
 	(ePlayerState, Idle)
 	Velocity: { 500, 500 }
@@ -59,4 +60,37 @@ obstacle2 {
 ps.CameraModule.EcsCamera {
 	Camera
 	Velocity: { 7, 7 }
+}
+
+entity1 {
+	Transform: {
+		translation: { 100, 100, 0 }
+	}
+	Rect: {
+		size: { 50, 50 },
+		color: { 255, 0, 0, 255 }
+	}
+
+	seq {
+		(Tween, Sequence)
+
+		action1 {
+			(Tween, Single)
+			TweenDuration: { value: 3 }
+			(TweenFunction, BackEaseIn)
+			(TweenFrom, Transform): { translation: { 100, 100, 0} }
+			(TweenTo, Transform): { translation: { 200, 200, 0} }
+		}
+		action {
+			(Tween, Single)
+			TweenDuration: { value: 2 }
+		}
+		action2 {
+			(Tween, Single)
+			TweenDuration: { value: 3 }
+			(TweenFunction, BackEaseOut)
+			(TweenFrom, Transform): { translation: { 200, 200, 0} }
+			(TweenTo, Transform): { translation: { 100, 100, 0} }
+		}
+	}
 }

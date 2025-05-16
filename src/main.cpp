@@ -1,4 +1,5 @@
 #include "ecsModule/renderModule/module.h"
+#include "ecsModule/tweenModule/module.h"
 #include "ecsModule/uiModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/physicsModule/module.h"
@@ -27,6 +28,7 @@ int main() {
 	world.import<ps::PhysicsModule>();
 	world.import<ps::CameraModule>();
 	world.import<ps::PlayerModule>();
+	world.import<ps::TweenModule>();
 	world.import<flecs::stats>();
 
 	world.set<flecs::Rest>({});

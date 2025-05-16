@@ -7,19 +7,12 @@
 #include "ext/matrix_transform.hpp"
 #include "gtc/quaternion.hpp"
 #include "resourceManager.h"
+#include "ecsModule/utils.h"
 
 #include <algorithm>
 #include <functional>
 
 using namespace ps;
-
-void dfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
-	callback(e);
-
-	e.children([callback](flecs::entity child) {
-		dfs(child, callback);
-	});
-}
 
 UiModule::UiModule(flecs::world& world) {
 	world.module<UiModule>();
@@ -149,7 +142,7 @@ UiModule::UiModule(flecs::world& world) {
 		.kind(Phases::Update) // mb post update;
 		.each([](flecs::entity root, RootNode) {
 			auto zIndex = -1;
-			dfs(root, [&zIndex](flecs::entity e) {
+			utils::dfs(root, [&zIndex](flecs::entity e) {
 				e.get_ref<Transform>()->translation.z = ++zIndex;
 			});
 		});

@@ -50,6 +50,10 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/sceneModule/module.cpp
 	src/ecsModule/renderModule/module.h
 	src/ecsModule/renderModule/module.cpp
+	src/ecsModule/tweenModule/module.h
+	src/ecsModule/tweenModule/module.cpp
+	src/ecsModule/utils.h
+	src/ecsModule/utils.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
