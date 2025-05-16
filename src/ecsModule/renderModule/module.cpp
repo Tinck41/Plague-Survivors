@@ -55,8 +55,8 @@ RenderModule::RenderModule(flecs::world& world) {
 			queue.renderCommands.emplace_back(
 				t.translation.z,
 				RectRenderData{
-					.rec      = { t.translation.x, t.translation.y, r.size.x, r.size.y },
-					.rotation = 0.f, // TODO
+					.rec      = { t.translation.x, t.translation.y, r.size.x * t.scale.x, r.size.y * t.scale.y },
+					.rotation = t.rotation.x,
 					.color    = r.color
 				}
 			);
@@ -79,8 +79,8 @@ RenderModule::RenderModule(flecs::world& world) {
 				SpriteRenderData{
 					.texture  = *s.texture,
 					.source   = source,
-					.dest     = { t.translation.x, t.translation.y, source.width, source.height },
-					.rotation = 0.f, // TODO
+					.dest     = { t.translation.x, t.translation.y, source.width * t.scale.x, source.height * t.scale.x },
+					.rotation = t.rotation.x,
 					.color    = s.color,
 				}
 			);

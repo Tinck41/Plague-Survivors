@@ -252,6 +252,8 @@ TweenModule::TweenModule(flecs::world world) {
 			const auto factor = tweenFunctions.at(funcId)(timer.value / duration.value);
 
 			tr.translation = glm::mix(from->translation, to->translation, factor);
+			tr.scale = glm::mix(from->scale, to->scale, factor);
+			tr.rotation = glm::mix(from->rotation, to->rotation, factor);
 		});
 
 	world.system("tween cleanup")

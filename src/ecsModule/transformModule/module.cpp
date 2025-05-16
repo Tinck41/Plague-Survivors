@@ -24,7 +24,7 @@ TransformModule::TransformModule(flecs::world& world) {
 	world.component<Transform>()
 		.member<glm::vec3>("translation")
 		.member<glm::vec3>("scale")
-		.member<float>("rotation")
+		.member<glm::vec3>("rotation")
 		.add(flecs::With, world.component<GlobalTransform>());
 
 	world.component<GlobalTransform>()
@@ -50,7 +50,7 @@ TransformModule::TransformModule(flecs::world& world) {
 		.each([](flecs::entity e, GlobalTransform* parentGlobal, GlobalTransform& childGlobal, Transform& childLocal) {
 			childLocal.matrix =
 				glm::translate(glm::mat4{ 1.f }, childLocal.translation) *
-				glm::mat4_cast(childLocal.rotation) *
+				glm::mat4_cast(glm::quat(glm::radians(childLocal.rotation))) *
 				glm::scale(glm::mat4{ 1.f }, childLocal.scale);
 
 			childGlobal.matrix = childLocal.matrix;
@@ -63,7 +63,7 @@ TransformModule::TransformModule(flecs::world& world) {
 			childGlobal.scale.x = glm::length(glm::vec3{ childGlobal.matrix[0] });
 			childGlobal.scale.y = glm::length(glm::vec3{ childGlobal.matrix[1] });
 			childGlobal.scale.z = glm::length(glm::vec3{ childGlobal.matrix[2] });
-			childGlobal.rotation = glm::quat_cast(childGlobal.matrix);
+			childGlobal.rotation = glm::degrees(glm::eulerAngles(glm::quat_cast(childGlobal.matrix)));
 		});
 
 	world.system<Dirty>()
