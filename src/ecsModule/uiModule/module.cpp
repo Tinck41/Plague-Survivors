@@ -229,7 +229,7 @@ UiModule::UiModule(flecs::world& world) {
 				t.translation.z,
 				PrimitiveRenderData{
 					.rec      = { n.pos.x, n.pos.y, n.size.x, n.size.y },
-					.rotation = 0.f, // TODO
+					.rotation = t.rotation.x,
 					.color    = c
 				}
 			);
@@ -253,7 +253,7 @@ UiModule::UiModule(flecs::world& world) {
 					.texture  = *i.texture,
 					.source   = source,
 					.dest     = { n.pos.x, n.pos.y, n.size.x, n.size.y },
-					.rotation = 0.f, // TODO
+					.rotation = t.rotation.x,
 					.color    = c,
 				}
 			);
@@ -269,7 +269,7 @@ UiModule::UiModule(flecs::world& world) {
 					.font     = GetFontDefault(),
 					.text     = text.string.c_str(),
 					.position = { n.pos.x, n.pos.y },
-					.rotation = 0.f, // TODO
+					.rotation = t.rotation.x,
 					.fontSize = text.fontSize * t.scale.x,
 					.spacing  = text.spacing,
 					.color    = c
