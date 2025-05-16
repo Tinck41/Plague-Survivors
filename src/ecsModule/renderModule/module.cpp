@@ -37,7 +37,7 @@ RenderModule::RenderModule(flecs::world& world) {
 		.member<Color>("color");
 
 	world.observer<Window>()
-		.event(flecs::OnAdd)
+		.event(flecs::OnSet)
 		.each([](Window& win) {
 			InitWindow(win.width, win.height, win.title.c_str());
 		});
