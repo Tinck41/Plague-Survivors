@@ -1,6 +1,7 @@
 using ps.UiModule
 using ps.TransformModule
 using ps.CameraModule
+using ps.TweenModule
 
 ps.UiModule.uiRoot {
 	canvas {
@@ -25,7 +26,7 @@ ps.UiModule.uiRoot {
 				Anchor: { 0.5, 0.5 }
 				Pivot: { 0.5, 0.5 }
 			}
-			primitive {
+			someForm {
 				Primitive: {
 					size: { 50.0, 50.0 }
 				}
@@ -33,6 +34,19 @@ ps.UiModule.uiRoot {
 					r: 0
 					g: 0
 					b: 255
+				}
+
+				loop {
+					(Tween, Loop)
+
+					transfrom {
+						(Tween, Single)
+						(TweenTarget, someForm)
+						TweenDuration: { value: 2 }
+						(TweenFunction, Linear)
+						(TweenFrom, Transform): { translation: { 0, 0, 0 } }
+						(TweenTo, Transform): { translation: { 100, 100, 0 } }
+					}
 				}
 			}
 		}
