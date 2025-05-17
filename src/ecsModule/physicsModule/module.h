@@ -20,8 +20,6 @@ namespace ps {
 
 		BodyType type = BodyType::Static;
 		bool fixedRotation = true;
-
-		b2BodyId bodyId;
 	};
 
 	struct BoxCollider {
@@ -31,7 +29,6 @@ namespace ps {
 		float dencity = 1.f;
 		float friction = 0.f;
 		float restitution = 0.f;
-		float restitutionThreshold = 0.f;
 	};
 
 	struct Velocity : public glm::vec<2, float, glm::defaultp> {

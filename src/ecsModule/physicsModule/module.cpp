@@ -1,9 +1,11 @@
 #include "module.h"
 
 #include "box2d/box2d.h"
+#include "box2d/math_functions.h"
 #include "ecsModule/common.h"
 #include "ecsModule/timeModule/module.h"
 #include "ecsModule/transformModule/module.h"
+#include "trigonometric.hpp"
 
 using namespace ps;
 
@@ -17,8 +19,12 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 
 	world.component<Physics>();
 	world.component<Velocity>();
-	world.component<Rigidbody>();
-	world.component<BoxCollider>().add(flecs::With, world.component<Rigidbody>());
+	world.component<b2BodyId>();
+	world.component<Rigidbody>()
+		.add(flecs::With, world.component<b2BodyId>());
+	world.component<BoxCollider>()
+		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<Rigidbody>());
 
 	world.component<b2WorldId>()
 		.member<uint16_t>("index1")
@@ -41,16 +47,14 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 
 	world.component<Rigidbody>()
 		.member<Rigidbody::BodyType>("type")
-		.member<bool>("fixedRotation")
-		.member<b2BodyId>("bodyId");
+		.member<bool>("fixedRotation");
 
 	world.component<BoxCollider>()
 		.member<glm::vec2>("offset")
 		.member<glm::vec2>("size")
 		.member<float>("dencity")
 		.member<float>("friction")
-		.member<float>("restitution")
-		.member<float>("restitutionThreshold");
+		.member<float>("restitution");
 
 	world.component<Velocity>()
 		.member<float>("x")
@@ -86,46 +90,63 @@ PhysicsModule::PhysicsModule(flecs::world& world) {
 			b2World_Step(p.worldId, t.deltaTime, p.subStepCount);
 		});
 
-	world.observer<Physics, BoxCollider, Rigidbody, Transform*>()
+	world.observer<Physics, BoxCollider, Rigidbody, b2BodyId, Transform>("init colliders")
 		.term_at(0).singleton()
-		//.with<Rigidbody>().filter()
+		.term_at(2).filter()
+		.term_at(3).filter()
+		.term_at(4).filter()
 		.event(flecs::OnSet)
-		.each([](Physics& p, BoxCollider& b, Rigidbody& r, Transform* t) {
+		.each([](Physics& p, BoxCollider& b, Rigidbody& r, b2BodyId& id, Transform& t) {
 			auto bodyDef = b2DefaultBodyDef();
 
 			bodyDef.type          = r.type == Rigidbody::BodyType::Dynamic ? b2BodyType::b2_dynamicBody : b2BodyType::b2_staticBody;
-			bodyDef.position      = t ? b2Vec2{ (t->translation.x + b.size.x / 2) / PPM, (t->translation.y + b.size.y / 2) / PPM } : b2Vec2{ b.size.x / 2 / PPM, b.size.y / 2 / PPM };
-			//bodyDef.angle         = t ? t->rotation : 0;
+			bodyDef.position      = b2Vec2{ (t.translation.x + b.size.x / 2) / PPM, (t.translation.y + b.size.y / 2) / PPM };
+			bodyDef.rotation      = b2MakeRot(glm::radians(t.rotation.x));
 			bodyDef.fixedRotation = r.fixedRotation;
 
-			r.bodyId = b2CreateBody(p.worldId, &bodyDef);
+			id = b2CreateBody(p.worldId, &bodyDef);
 
-			auto polygon = b2MakeBox((b.size.x * (t ? t->scale.x : 1.f)) / 2.f / PPM, (b.size.y * (t ? t->scale.y : 1.f)) / 2.f / PPM);
+			auto polygon = b2MakeBox((b.size.x * t.scale.x) / 2.f / PPM, (b.size.y * t.scale.y ) / 2.f / PPM);
 
 			auto shapeDef = b2DefaultShapeDef();
 
 			shapeDef.density              = b.dencity;
 			shapeDef.material.friction    = b.friction;
 			shapeDef.material.restitution = b.restitution;
-			//fixtureDef.restitutionThreshold = b.restitutionThreshold;
 
-			b2CreatePolygonShape(r.bodyId, &shapeDef, &polygon);
+			b2CreatePolygonShape(id, &shapeDef, &polygon);
 		});
 
-	world.system<Direction, Velocity, Rigidbody>()
-		.kind(Phases::Update)
-		.each([](Direction& d, Velocity& v, Rigidbody& r) {
-			b2Body_SetLinearVelocity(r.bodyId, { d.x * v.x / PPM, d.y * v.y / PPM });
+	world.observer<Rigidbody, b2BodyId>()
+		.term_at(1).filter()
+		.event(flecs::OnSet)
+		.each([](Rigidbody& r, b2BodyId& id) {
+			if (id.index1 != 0) {
+				b2Body_SetType(id, r.type == Rigidbody::BodyType::Dynamic ? b2BodyType::b2_dynamicBody : b2BodyType::b2_staticBody);
+				b2Body_SetFixedRotation(id, r.fixedRotation);
+			}
 		});
 
-	world.system<Transform, const Rigidbody, const BoxCollider>()
-		.kind(Phases::Update)
-		.each([](flecs::entity e, Transform& t, const Rigidbody& r, const BoxCollider& b) {
-			const auto& position = b2Body_GetPosition(r.bodyId);
+	world.observer<b2BodyId>()
+		.event(flecs::OnRemove)
+		.each([](b2BodyId& id) {
+			b2DestroyBody(id);
+		});
 
-			t.translation.x = position.x * PPM - b.size.x / 2;
-			t.translation.y = position.y * PPM - b.size.y / 2;
-			//t.rotation = body->GetAngle();
+	world.system<Direction, Velocity, b2BodyId>()
+		.kind(Phases::Update)
+		.each([](Direction& d, Velocity& v, b2BodyId& id) {
+			b2Body_SetLinearVelocity(id, { d.x * v.x / PPM, d.y * v.y / PPM });
+		});
+
+	world.system<Transform, const b2BodyId, const BoxCollider>()
+		.kind(Phases::Update)
+		.each([](flecs::entity e, Transform& t, const b2BodyId& id, const BoxCollider& b) {
+			const auto& position = b2Body_GetPosition(id);
+
+			t.translation.x = position.x * PPM - b.size.x / 2.f;
+			t.translation.y = position.y * PPM - b.size.y / 2.f;
+			t.rotation.x    = glm::degrees(b2Rot_GetAngle(b2Body_GetRotation(id)));
 		});
 
 	world.add<Physics>();
