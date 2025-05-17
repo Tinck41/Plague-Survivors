@@ -143,7 +143,9 @@ UiModule::UiModule(flecs::world& world) {
 		.each([](flecs::entity root, RootNode) {
 			auto zIndex = -1;
 			utils::dfs(root, [&zIndex](flecs::entity e) {
-				e.get_ref<Transform>()->translation.z = ++zIndex;
+				if (e.has<Node>()) {
+					e.get_ref<Transform>()->translation.z = ++zIndex;
+				}
 			});
 		});
 

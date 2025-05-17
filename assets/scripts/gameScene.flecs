@@ -17,11 +17,11 @@ player {
 		size: { 50, 50 },
 		color: { 0, 255, 0, 255 }
 	}
-	BoxCollider: {
-		size: { 50, 50 }
-	}
 	Rigidbody: {
 		type: Dynamic
+	}
+	BoxCollider: {
+		size: { 50, 50 }
 	}
 }
 
@@ -35,22 +35,6 @@ obstacle1 {
 	}
 	BoxCollider: {
 		size: { 150, 150 }
-	}
-	Rigidbody: {
-		type: Static
-	}
-}
-
-obstacle2 {
-	Transform: {
-		translation: { 600, 50, 0 }
-	}
-	Rect: {
-		size: { 50, 50 },
-		color: { 255, 0, 0, 255 }
-	}
-	BoxCollider: {
-		size: { 50, 50 }
 	}
 	Rigidbody: {
 		type: Static
@@ -71,26 +55,22 @@ entity1 {
 		color: { 255, 0, 0, 255 }
 	}
 
-	seq {
-		(Tween, Sequence)
+	loop {
+		(Tween, Loop)
+		seq {
+			(Tween, Sequence)
 
-		action1 {
-			(Tween, Single)
-			TweenDuration: { value: 3 }
-			(TweenFunction, BackEaseIn)
-			(TweenFrom, Transform): { translation: { 100, 100, 0} }
-			(TweenTo, Transform): { translation: { 200, 200, 0} }
-		}
-		action {
-			(Tween, Single)
-			TweenDuration: { value: 2 }
-		}
-		action2 {
-			(Tween, Single)
-			TweenDuration: { value: 3 }
-			(TweenFunction, BackEaseOut)
-			(TweenFrom, Transform): { translation: { 200, 200, 0} }
-			(TweenTo, Transform): { translation: { 100, 100, 0} }
+			action1 {
+				(Tween, Single)
+				(TweenTarget, entity1)
+				TweenDuration: { value: 1 }
+				(TweenFunction, Linear)
+				(TweenFrom, entity1)
+				(TweenTo, Transform): {
+					translation: { 100, 100, 0 },
+					rotation: { 360, 0, 0}
+				}
+			}
 		}
 	}
 }

@@ -69,9 +69,23 @@ namespace ps {
 
 	struct Anchor : public glm::vec2 {};
 	struct Pivot : public glm::vec2 {};
-	struct BackgroundColor : public Color {
-		BackgroundColor() : Color(WHITE) {}
-		BackgroundColor(Color color) : Color(color) {}
+	struct BackgroundColor {
+		BackgroundColor() : BackgroundColor(WHITE) {}
+		BackgroundColor(glm::u8vec4 color) : r(color.r), g(color.g), b(color.b), a(color.a) {}
+		BackgroundColor(Color color) : r(color.r), g(color.g), b(color.b), a(color.a) {}
+
+		operator Color () const {
+			return { r, g, b, a };
+		}
+
+		operator glm::u8vec4 () const {
+			return { r, g, b, a };
+		}
+
+		unsigned char r;
+		unsigned char g;
+		unsigned char b;
+		unsigned char a;
 	};
 
 	struct Primitive {
