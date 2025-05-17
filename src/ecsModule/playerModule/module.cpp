@@ -8,9 +8,9 @@
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/common.h"
 #include "raylib.h"
-#include "spdlog/spdlog.h"
 
 #include "gtx/compatibility.hpp"
+#include "gtx/easing.hpp"
 
 #include <random>
 
@@ -85,6 +85,25 @@ PlayerModule::PlayerModule(flecs::world& world) {
 					.distance = 300.f,
 					.duration = .1f
 				});
+				e.world().set<CameraShakeData>({
+					.amplitude = 10.f,
+					.stateData = {
+						{ CameraShakeData::State::Increasing, { .duration = .01f } },
+						{ CameraShakeData::State::Stagnating, { .duration = .02f } },
+						{ CameraShakeData::State::Decreasing, { .duration = .06f } }
+					},
+				});
+			}
+
+			if (i.keys[Key::H].pressed) {
+				e.world().set<CameraShakeData>({
+					.amplitude = 10.f,
+					.stateData = {
+						{ CameraShakeData::State::Increasing, { .duration = .1f } },
+						{ CameraShakeData::State::Stagnating, { .duration = .2f } },
+						{ CameraShakeData::State::Decreasing, { .duration = .6f } }
+					},
+				});
 			}
 
 			if (d.x != 0 || d.y != 0) {
@@ -116,4 +135,44 @@ PlayerModule::PlayerModule(flecs::world& world) {
 		.each([](const Time& time, Transform& ct, const Velocity& cv, const Transform& t) {
 			ct.translation = glm::lerp(ct.translation, t.translation, cv.x * time.deltaTime);
 		});
+
+	world.system<const Time, CameraShakeData, Transform, Camera>()
+		.term_at(0).singleton()
+		.term_at(1).singleton()
+		.each([](flecs::entity e, const Time& t, CameraShakeData& shake, Transform& ct, Camera&){ 
+			auto& data = shake.stateData[shake.currentState];
+
+			if (data.timer >= data.duration) {
+				if (shake.currentState == CameraShakeData::State::Decreasing) {
+					e.world().remove<CameraShakeData>();
+
+					return;
+				} else if (shake.currentState == CameraShakeData::State::Increasing) {
+					shake.currentState = CameraShakeData::State::Stagnating;
+				} else if (shake.currentState == CameraShakeData::State::Stagnating) {
+					shake.currentState = CameraShakeData::State::Decreasing;
+				}
+			}
+
+			const auto start = shake.currentState == CameraShakeData::State::Increasing ?
+				0.f : shake.amplitude;
+			const auto end   = shake.currentState == CameraShakeData::State::Decreasing ?
+				0.f : shake.amplitude;
+
+			float eased = 0.f;
+			if (shake.currentState == CameraShakeData::State::Increasing) {
+				eased = glm::quadraticEaseIn(data.timer);
+			} else if (shake.currentState == CameraShakeData::State::Stagnating) {
+				eased = glm::linearInterpolation(data.timer);
+			} else {
+				eased = glm::quadraticEaseOut(data.timer);
+			}
+			auto value = glm::mix(start, end, eased);
+
+			ct.translation.x += GetRandomValue(-100, 100) * 0.01f * value;
+			ct.translation.y += GetRandomValue(-100, 100) * 0.01f * value;
+
+			data.timer += t.deltaTime;
+		});
+
 }
