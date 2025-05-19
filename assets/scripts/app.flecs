@@ -1,0 +1,9 @@
+using ps.RenderModule
+
+$ {
+	Window: {
+		width: 960,
+		height: 510
+	}
+}
+

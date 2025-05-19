@@ -117,21 +117,12 @@ TweenModule::TweenModule(flecs::world world) {
 			e.add<TweenState, Waiting>();
 		});
 
-	world.system("execute root tween")
-		.with<Tween>(flecs::Wildcard)
-		.with<TweenState, Waiting>()
-		.without<TweenNextState>(flecs::Wildcard)
-		.without<Tween>(flecs::Wildcard).parent()
-		.kind(Phases::Update)
-		.each([](flecs::entity e) {
-			e.add<TweenNextState, Running>();
-		});
-
-	world.system("start tween container")
-		.with<TweenNextState, Running>()
-		.without<TweenState, Running>()
-		.kind(Phases::Update)
-		.each([](flecs::entity e) {
+	world.observer<TweenNextState>()
+		.term_at(0).second(flecs::Wildcard)
+		.event(flecs::OnAdd)
+		.write<TweenState>(flecs::Wildcard)
+		.write<TweenNextState>(flecs::Wildcard)
+		.each([](flecs::entity e, TweenNextState) {
 			e.children([](flecs::entity child) {
 				child.add<TweenState, Waiting>();
 				child.add<TweenNextState, Waiting>();
@@ -140,8 +131,42 @@ TweenModule::TweenModule(flecs::world world) {
 			e.add<TweenState, Running>();
 		});
 
+	world.system("execute root tween")
+		.with<Tween>(flecs::Wildcard)
+		.with<TweenState, Waiting>()
+		.without<TweenNextState>(flecs::Wildcard)
+		.without<Tween>(flecs::Wildcard).parent()
+		.write<TweenNextState>(flecs::Wildcard)
+		.kind(Phases::Update)
+		.each([](flecs::entity e) {
+			e.add<TweenNextState, Running>();
+		});
+
+	//world.system("start tween container")
+	//	.with<TweenNextState, Running>()
+	//	.without<TweenState, Running>()
+	//	.write<TweenState>(flecs::Wildcard)
+	//	.write<TweenNextState>(flecs::Wildcard)
+	//	.kind(Phases::Update)
+	//	.each([](flecs::entity e) {
+	//		e.children([](flecs::entity child) {
+	//			child.add<TweenState, Waiting>();
+	//			child.add<TweenNextState, Waiting>();
+	//		});
+
+	//		e.add<TweenState, Running>();
+	//	});
+
+	world.system<TweenDuration>()
+		.kind(Phases::Update)
+		.each([](TweenDuration& d) {
+			int i = 0;
+		});
+
 	world.system<TweenSequence>("process tween sequence")
 		.with<TweenState, Running>()
+		.write<TweenState>(flecs::Wildcard)
+		.write<TweenNextState>(flecs::Wildcard)
 		.kind(Phases::Update)
 		.each([](flecs::entity e, TweenSequence) {
 			auto childrenIt = ecs_children(e.world(), e.id());
@@ -168,6 +193,8 @@ TweenModule::TweenModule(flecs::world world) {
 
 	world.system<TweenSimultaneus>("process tween simultaneous")
 		.with<TweenState, Running>()
+		.write<TweenState>(flecs::Wildcard)
+		.write<TweenNextState>(flecs::Wildcard)
 		.kind(Phases::Update)
 		.each([](flecs::entity e, TweenSimultaneus) {
 			auto notCompletedTweens = e.world().query_builder()
@@ -189,6 +216,8 @@ TweenModule::TweenModule(flecs::world world) {
 
 	world.system<TweenLoop>("process tween loop")
 		.with<TweenState, Running>()
+		.write<TweenState>(flecs::Wildcard)
+		.write<TweenNextState>(flecs::Wildcard)
 		.kind(Phases::Update)
 		.each([](flecs::entity e, TweenLoop) {
 			auto tween = e.world().query_builder()
@@ -208,6 +237,7 @@ TweenModule::TweenModule(flecs::world world) {
 	world.system<TweenTimer>("tween timer reset")
 		.without<TweenState, Running>()
 		.with<TweenNextState, Running>()
+		.write<TweenState>(flecs::Wildcard)
 		.kind(Phases::Update)
 		.each([](flecs::entity e, TweenTimer& timer) {
 			timer.value = 0;
