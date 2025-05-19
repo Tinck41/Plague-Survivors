@@ -2,73 +2,74 @@ using ps.UiModule
 using ps.TransformModule
 using ps.CameraModule
 using ps.TweenModule
+using ps.RenderModule
+
+$ {
+	Window: {
+		width: 960,
+		height: 510
+	}
+}
 
 ps.UiModule.uiRoot {
-	canvas {
-		Image: { "assets/main_menu.jpg" }
+	MainMenu {
+		Stretch: { 1, 1 };
+		Node
 
-		button1 {
-			Primitive: {
-				size: { 100.0, 100.0 }
+		Buttons {
+			Grid: {
+				rows: 3
+				columns: 1
 			}
-			BackgroundColor: {
-				r: 0
-				g: 255
-				b: 0
-			}
+			Anchor: { 0.5, 0.5 }
+			Pivot: { 0.5, 0.5 }
 
-			label1 {
-				Text: {
-					string: "TEST",
-					fontSize: 24.0,
-					spacing: 1.0
+			PlayButton {
+				Button: {
+					defaultColor: { r: 0 g: 255 b: 0 a: 255}
 				}
-				Anchor: { 0.5, 0.5 }
-				Pivot: { 0.5, 0.5 }
-			}
-			someForm {
 				Primitive: {
-					size: { 50.0, 50.0 }
-				}
-				BackgroundColor: {
-					r: 0
-					g: 0
-					b: 255
+					size: { 100.0, 100.0 }
 				}
 
-				loop {
-					(Tween, Loop)
-
-					transfrom {
-						(Tween, Single)
-						(TweenTarget, someForm)
-						TweenDuration: { value: 2 }
-						(TweenFunction, Linear)
-						(TweenFrom, Transform): { translation: { 0, 0, 0 } }
-						(TweenTo, Transform): { translation: { 100, 100, 0 } }
+				PlayLabel {
+					Text: {
+						string: "Play",
+						fontSize: 24,
+						spacing: 1
 					}
 				}
 			}
-		}
-		button2 {
-			Button: {
-				size: { 100.0, 100.0 }
-				defaultColor: { r: 255, g: 0, b: 0, a: 255 }
-				hoverColor: { r: 0, g: 255, b: 0, a: 255 }
-				clickColor: { r: 0, g: 0, b: 255, a: 255 }
-			}
-			Primitive: {
-				size: { 100.0, 100.0 }
-			}
-			Transform: {
-				translation: { 50.0, 150.0, 0.0 }
-			}
+			SettingsButton {
+				Button: {
+					defaultColor: { r: 255 g: 255 b: 0 a: 255}
+				}
+				Primitive: {
+					size: { 100.0, 100.0 }
+				}
 
-			label2 {
-				Text: {
-					string: "NEXT TEST",
-					fontSize: 24.0,
-					spacing: 1.0
+				SettingsLabel {
+					Text: {
+						string: "Settings",
+						fontSize: 24,
+						spacing: 1
+					}
+				}
+			}
+			QuitButton {
+				Button: {
+					defaultColor: { r: 255 g: 0 b: 0 a: 255}
+				}
+				Primitive: {
+					size: { 500.0, 100.0 }
+				}
+
+				QuitLabel {
+					Text: {
+						string: "Quit",
+						fontSize: 24,
+						spacing: 1
+					}
 				}
 			}
 		}

@@ -166,14 +166,24 @@ InputModule::InputModule(flecs::world& world) {
 	world.system<Window>()
 		.term_at(0).singleton()
 		.kind(Phases::HandleInput)
-		.each([](flecs::iter& it, size_t, Window& w) {
+		.each([](flecs::iter& it, size_t i, Window& w) {
 			if (IsWindowResized() && !IsWindowFullscreen()) {
 				w.width = GetScreenWidth();
 				w.height = GetScreenHeight();
 
 				SetWindowSize(w.width, w.height);
+
+				it.world().event<Resized>()
+					.id<Window>()
+					.entity(it.world().singleton<Window>())
+					.emit();
 			} else if ((w.width != GetScreenWidth() || w.height != GetScreenHeight()) && !IsWindowFullscreen()) {
 				SetWindowSize(w.width, w.height);
+
+				it.world().event<Resized>()
+					.id<Window>()
+					.entity(it.world().singleton<Window>())
+					.emit();
 			}
 		});
 

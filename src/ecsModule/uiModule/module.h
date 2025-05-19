@@ -69,6 +69,7 @@ namespace ps {
 
 	struct Anchor : public glm::vec2 {};
 	struct Pivot : public glm::vec2 {};
+	struct Stretch : public glm::vec2 {};
 	struct BackgroundColor {
 		BackgroundColor() : BackgroundColor(WHITE) {}
 		BackgroundColor(glm::u8vec4 color) : r(color.r), g(color.g), b(color.b), a(color.a) {}
@@ -121,7 +122,21 @@ namespace ps {
 		Color clickColor;
 	};
 
+	struct Grid {
+		size_t rows;
+		size_t columns;
+		glm::vec2 offsetX;
+		glm::vec2 offsetY;
+	};
+
+	struct GridItem {
+		size_t row;
+		size_t column;
+	};
+
 	struct UiModule {
 		UiModule(flecs::world& world);
+
+		inline static flecs::entity EcsUiRoot;
 	};
 }
