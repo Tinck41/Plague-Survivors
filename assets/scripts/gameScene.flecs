@@ -57,24 +57,5 @@ entity1 {
 
 	loop {
 		(Tween, Loop)
-		seq {
-			(Tween, Sequence)
-
-			action {
-				(Tween, Single)
-				TweenDuration: { value: 2 }
-			}
-			action1 {
-				(Tween, Single)
-				(TweenTarget, entity1)
-				TweenDuration: { value: 1 }
-				(TweenFunction, Linear)
-				(TweenFrom, entity1)
-				(TweenTo, Transform): {
-					translation: { 100, 100, 0 },
-					rotation: { 360, 0, 0}
-				}
-			}
-		}
 	}
 }
