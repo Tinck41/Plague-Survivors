@@ -17,6 +17,8 @@ namespace ps {
 		int height;
 	};
 
+	struct Resized {};
+
 	struct SpriteRenderData {
 		Texture2D texture;
 		Rectangle source;

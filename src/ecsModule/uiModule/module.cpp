@@ -2,6 +2,7 @@
 
 #include "ecsModule/common.h"
 #include "ecsModule/inputModule/module.h"
+#include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "raylib.h"
 #include "ext/matrix_transform.hpp"
@@ -18,6 +19,8 @@ UiModule::UiModule(flecs::world& world) {
 	world.module<UiModule>();
 
 	world.import<TransformModule>();
+	world.import<RenderModule>();
+	world.import<InputModule>();
 
 	world.component<Anchor>();
 	world.component<Pivot>();
@@ -41,6 +44,8 @@ UiModule::UiModule(flecs::world& world) {
 	world.component<Button>()
 		.add(flecs::With, world.component<Node>())
 		.add(flecs::With, world.component<Interaction>());
+	world.component<Grid>()
+		.add(flecs::With, world.component<Node>());
 
 	world.component<Node>()
 		.member<glm::vec2>("pos")
@@ -51,6 +56,10 @@ UiModule::UiModule(flecs::world& world) {
 		.member<float>("y");
 
 	world.component<Pivot>()
+		.member<float>("x")
+		.member<float>("y");
+
+	world.component<Stretch>()
 		.member<float>("x")
 		.member<float>("y");
 
@@ -97,7 +106,13 @@ UiModule::UiModule(flecs::world& world) {
 		.member<Color>("hoverColor")
 		.member<Color>("clickColor");
 
-	auto root = world.entity(UI_ROO_ID).add<RootNode>().add(flecs::OrderedChildren);
+	world.component<Grid>()
+		.member<size_t>("rows")
+		.member<size_t>("columns")
+		.member<glm::vec2>("offsetX")
+		.member<glm::vec2>("offsetY");
+
+	EcsUiRoot = world.entity(UI_ROO_ID).add<RootNode>().add(flecs::OrderedChildren);
 
 	world.observer<Image>()
 		.event(flecs::OnSet)
@@ -107,12 +122,32 @@ UiModule::UiModule(flecs::world& world) {
 
 	world.observer<Node>()
 		.event(flecs::OnSet)
-		.each([root](flecs::iter& it, size_t size, Node node) {
-			if (root.has<Dirty>()) {
+		.event(flecs::OnAdd)
+		.each([](flecs::entity e, Node node) {
+			e.add(flecs::OrderedChildren);
+
+			if (EcsUiRoot.has<Dirty>()) {
 				return;
 			}
 
-			root.add<Dirty>();
+			EcsUiRoot.add<Dirty>();
+		});
+
+	world.observer<Window>()
+		.event<Resized>()
+		.self()
+		.each([](Window& w) {
+			auto node = EcsUiRoot.get_mut<Node>();
+			node->size.x = w.width;
+			node->size.y = w.height;
+
+			EcsUiRoot.add<Dirty>();
+		});
+
+	world.observer<Grid>()
+		.event(flecs::OnSet)
+		.each([](flecs::entity e, Grid& g) {
+			e.add<Dirty>();
 		});
 
 	world.system<Node, GlobalTransform, Primitive>()
@@ -135,6 +170,13 @@ UiModule::UiModule(flecs::world& world) {
 		.each([](Node& n, GlobalTransform& t, Text& text) {
 			const auto fontRect = MeasureTextEx(GetFontDefault(), text.string.c_str(), text.fontSize * t.scale.x, text.spacing);
 			n.size = glm::vec2{ fontRect.x, fontRect.y } * glm::vec2{ t.scale };
+		});
+
+	world.system<Node, Node, Stretch>()
+		.with<Dirty>()
+		.term_at(0).parent()
+		.each([](Node& parent, Node& child, Stretch& stretch) {
+			child.size = parent.size * stretch;
 		});
 
 	world.system<RootNode>()
@@ -166,6 +208,47 @@ UiModule::UiModule(flecs::world& world) {
 			auto matrix = cTransform.matrix * cNode.matrix;
 
 			cNode.pos = glm::vec2(matrix[3]);
+		});
+
+	world.system<Grid, Node>()
+		.kind(Phases::Update)
+		.each([](flecs::entity e, Grid& grid, Node& node) {
+			auto childrenIt = ecs_children(e.world(), e.id());
+
+			while (ecs_children_next(&childrenIt)) {
+				for (int i = 0; i < childrenIt.count; ++i) {
+					auto child = flecs::entity(childrenIt.world, childrenIt.entities[i]);
+
+					child.set<GridItem>({
+						.row    = i / grid.columns,
+						.column = i % grid.columns,
+					});
+				}
+			}
+
+			auto query = e.world().query_builder<Node>()
+				.with(flecs::ChildOf, e)
+				.build();
+
+			query.run([&node, grid](flecs::iter& it) {
+				while(it.next()) {
+					auto nodes = it.field<Node>(0);
+
+					node.size.x = nodes[0].size.x * grid.columns;
+					node.size.y = nodes[0].size.y * grid.rows;
+
+					return;
+				}
+			});
+		});
+
+	world.system<Grid, Transform, Node, GridItem>()
+		.with<Dirty>()
+		.term_at(0).parent()
+		.kind(Phases::Update)
+		.each([](flecs::entity e, Grid& grid, Transform& t, Node& child, GridItem& item) {
+			t.translation.x = (grid.offsetX.x + child.size.x + grid.offsetX.y) * item.column;
+			t.translation.y = (grid.offsetY.x + child.size.y + grid.offsetY.y) * item.row;
 		});
 
 	world.system<Input, Interaction, const Node, const GlobalTransform>()
@@ -296,9 +379,5 @@ UiModule::UiModule(flecs::world& world) {
 		});
 
 	world.add<UiRenderQueue>();
-	root.set<Node>({
-		.pos{ 0, 0 },
-		.size{ 600, 600 }
-	});
 }
 

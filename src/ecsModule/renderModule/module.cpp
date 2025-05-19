@@ -19,13 +19,24 @@ RenderModule::RenderModule(flecs::world& world) {
 		.add(flecs::With, world.component<Transform>());
 	world.component<Rect>().add(flecs::With, world.component<Transform>());
 	world.component<Circle>().add(flecs::With, world.component<Transform>());
-	world.component<Window>();
+	world.component<Window>().add(flecs::With, world.component<RenderTexture2D>());
 
 	world.component<Color>()
 		.member<unsigned char>("r")
 		.member<unsigned char>("g")
 		.member<unsigned char>("b")
 		.member<unsigned char>("a");
+
+	world.component<std::string>()
+		.opaque(flecs::String)
+			.serialize([](const flecs::serializer *s, const std::string *data) {
+				const char *str = data->c_str();
+				return s->value(flecs::String, &str);
+			})
+			.assign_string([](std::string* data, const char *value) {
+				*data = value;
+			});
+
 
 	world.component<Window>()
 		.member<std::string>("title")
@@ -36,10 +47,11 @@ RenderModule::RenderModule(flecs::world& world) {
 		.member<glm::vec2>("size")
 		.member<Color>("color");
 
-	world.observer<Window>()
+	world.observer<Window, RenderTexture2D>()
 		.event(flecs::OnSet)
-		.each([](Window& win) {
+		.each([](Window& win, RenderTexture2D& renderTexture) {
 			InitWindow(win.width, win.height, win.title.c_str());
+			renderTexture = LoadRenderTexture(win.width, win.height);
 		});
 
 	world.observer<Window>()
@@ -100,11 +112,11 @@ RenderModule::RenderModule(flecs::world& world) {
 			);
 		});
 
-	world.system<Window>("BeginDrawing")
-		.term_at(0).singleton()
+	world.system<RenderTexture2D>("BeginDrawing")
 		.kind(Phases::Clear)
-		.each([](Window& w) {
+		.each([](RenderTexture2D& texture) {
 			BeginDrawing();
+			//BeginTextureMode(texture);
 			ClearBackground(BLACK);
 		});
 
@@ -123,16 +135,31 @@ RenderModule::RenderModule(flecs::world& world) {
 			queue.renderCommands.clear();
 		});
 
-	world.system<Window>("EndDrawing")
-		.term_at(0).singleton()
+	world.system<Window, RenderTexture2D>("EndDrawing")
 		.kind(Phases::Display)
-		.each([](Window& w) {
+		.each([](Window& w, RenderTexture2D& texture) {
+			//const auto scale = std::max(
+			//	std::floorf(
+			//		std::min(
+			//			w.width / static_cast<float>(texture.texture.width),
+			//			w.height / static_cast<float>(texture.texture.height)
+			//		)
+			//	),
+			//	1.f
+			//);
+			//EndTextureMode();
+			//ClearBackground(BLACK);
+			//DrawTexturePro(
+			//	texture.texture,
+			//	{ 0, 0, static_cast<float>(texture.texture.width), static_cast<float>(-texture.texture.height) },
+			//	//{ (w.width - texture.texture.width) / 2.f, (w.height - texture.texture.height) / 2.f, texture.texture.width * scale, texture.texture.height * scale },
+			//	{ 0, 0, texture.texture.width * scale, texture.texture.height * scale },
+			//	{},
+			//	0,
+			//	WHITE
+			//);
 			EndDrawing();
 		});
 
 	world.set<RenderQueue>({});
-	world.set<Window>({
-		"Plague: Survivors",
-		600, 600
-	});
 }

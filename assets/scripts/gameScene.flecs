@@ -60,6 +60,10 @@ entity1 {
 		seq {
 			(Tween, Sequence)
 
+			action {
+				(Tween, Single)
+				TweenDuration: { value: 2 }
+			}
 			action1 {
 				(Tween, Single)
 				(TweenTarget, entity1)
