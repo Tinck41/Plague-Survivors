@@ -12,6 +12,7 @@
 #include "resourceManager.h"
 
 #include "flecs.h"
+#include "spdlog/spdlog.h"
 
 int main() {
 	ps::ResourceManager::init(std::make_unique<ps::ResourceManager>());
@@ -38,6 +39,7 @@ int main() {
 	world.script().filename("assets/scripts/gameScene.flecs").run();
 
 	while(!WindowShouldClose()) {
-		world.progress(GetFrameTime());
+		spdlog::info("----------------------tick---------------------");
+		world.progress();
 	}
 }
