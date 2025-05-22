@@ -5,7 +5,9 @@
 #include <unordered_map>
 
 namespace ps {
-	struct Tween {};
+	struct Tween {
+		std::function<void(flecs::entity)> processChildren = [](auto) {};
+	};
 	struct Single {};
 	struct Sequence {};
 	struct Simultaneous {};
