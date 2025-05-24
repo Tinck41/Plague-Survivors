@@ -5,9 +5,7 @@
 #include <unordered_map>
 
 namespace ps {
-	struct Tween {
-		std::function<void(flecs::entity)> processChildren = [](auto) {};
-	};
+	struct Tween {};
 	struct Single {};
 	struct Sequence {};
 	struct Simultaneous {};
@@ -69,5 +67,6 @@ namespace ps {
 		TweenModule(flecs::world world);
 
 		inline static std::unordered_map<flecs::entity_t, std::function<float(float)>> tweenFunctions;
+		inline static std::unordered_map<flecs::entity_t, std::function<void(flecs::entity&)>> containerFunctions;
 	};
 }
