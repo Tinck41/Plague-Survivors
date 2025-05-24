@@ -7,9 +7,15 @@ using namespace ps;
 TimeModule::TimeModule(flecs::world& world) {
 	world.module<TimeModule>();
 
-	world.component<Time>();
+	world.component<Time>()
+		.member<float>("deltaTime");
 
-	world.set<Time>({});
+	world.observer<Time>()
+		.event(flecs::OnSet)
+		.event(flecs::OnAdd)
+		.each([](Time& t) {
+			t.deltaTime = GetFrameTime();
+		});
 
 	world.system<Time>()
 		.term_at(0).singleton()
@@ -17,4 +23,6 @@ TimeModule::TimeModule(flecs::world& world) {
 		.each([](Time& t) {
 			t.deltaTime = GetFrameTime();
 		});
+
+	world.set<Time>({});
 }

@@ -9,6 +9,63 @@
 
 using namespace ps;
 
+void runSequence(flecs::entity e) {
+	spdlog::info("[seq]: iterate children {}", e.name());
+	auto childrenIt = ecs_children(e.world(), e.id());
+
+	while (ecs_children_next(&childrenIt)) {
+		for (int i = 0; i < childrenIt.count; ++i) {
+			auto child = flecs::entity(childrenIt.world, childrenIt.entities[i]);
+
+			if (child.has<TweenNextState, Waiting>()) {
+				spdlog::info("[seq]: run child {}", child.name());
+				child.add<TweenNextState, Running>();
+			}
+
+			if (child.has<TweenNextState, Completed>()) {
+				spdlog::info("[seq]: complete child {}", child.name());
+				child.add<TweenState, Completed>();
+			} else {
+				return;
+			}
+		}
+
+		spdlog::info("[seq]: completed");
+		e.add<TweenState, Completed>();
+		e.add<TweenNextState, Completed>();
+	}
+}
+
+void runLoop(flecs::entity e) {
+	spdlog::info("[loop]: iterate children {}", e.name());
+	e.children([](flecs::entity child) {
+		if (!child.has<TweenNextState, Running>()) {
+			child.add<TweenState, Waiting>();
+			child.add<TweenNextState, Running>();
+		}
+	});
+
+}
+
+void runSimultaneous(flecs::entity e) {
+	auto notCompletedTweens = e.world().query_builder()
+		.with(flecs::ChildOf, e)
+		.without<TweenNextState, Completed>()
+		.build();
+
+	if (!notCompletedTweens.first().is_valid()) {
+		e.add<TweenState, Completed>();
+		e.add<TweenNextState, Completed>();
+
+		return;
+	}
+
+	notCompletedTweens.each([](flecs::entity child) {
+		child.add<TweenNextState, Running>();
+	});
+
+}
+
 TweenModule::TweenModule(flecs::world world) {
 	world.module<TweenModule>();
 
@@ -96,6 +153,10 @@ TweenModule::TweenModule(flecs::world world) {
 	tweenFunctions[world.id<easing::BounceEaseOut>()]        = [](float value) { return glm::bounceEaseOut(value); };
 	tweenFunctions[world.id<easing::BounceEaseInOut>()]      = [](float value) { return glm::bounceEaseInOut(value); };
 
+	containerFunctions[world.id<Sequence>()]     = &runSequence;
+	containerFunctions[world.id<Simultaneous>()] = &runSimultaneous;
+	containerFunctions[world.id<Loop>()]         = &runLoop;
+
 	using FromTransform = flecs::pair<TweenFrom, Transform>;
 	using ToTransform   = flecs::pair<TweenTo, Transform>;
 
@@ -115,76 +176,6 @@ TweenModule::TweenModule(flecs::world world) {
 			e.add<TweenState, Waiting>();
 		});
 
-	world.observer<Tween>("init (tween, seq)")
-		.term_at(0).second<Sequence>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Tween& tween){
-			tween.processChildren = [](flecs::entity e) {
-				spdlog::info("[seq]: iterate children {}", e.name());
-				auto childrenIt = ecs_children(e.world(), e.id());
-
-				while (ecs_children_next(&childrenIt)) {
-					for (int i = 0; i < childrenIt.count; ++i) {
-						auto child = flecs::entity(childrenIt.world, childrenIt.entities[i]);
-
-						if (child.has<TweenNextState, Waiting>()) {
-							spdlog::info("[seq]: run child {}", child.name());
-							child.add<TweenNextState, Running>();
-						}
-
-						if (child.has<TweenNextState, Completed>()) {
-							spdlog::info("[seq]: complete child {}", child.name());
-							child.add<TweenState, Completed>();
-						} else {
-							return;
-						}
-					}
-
-					spdlog::info("[seq]: completed");
-					e.add<TweenState, Completed>();
-					e.add<TweenNextState, Completed>();
-				}
-			};
-		});
-
-	world.observer<Tween>("init (tween, sim)")
-		.term_at(0).second<Simultaneous>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Tween& tween){
-			tween.processChildren = [](flecs::entity e) {
-				auto notCompletedTweens = e.world().query_builder()
-					.with(flecs::ChildOf, e)
-					.without<TweenNextState, Completed>()
-					.build();
-
-				if (!notCompletedTweens.first().is_valid()) {
-					e.add<TweenState, Completed>();
-					e.add<TweenNextState, Completed>();
-
-					return;
-				}
-
-				notCompletedTweens.each([](flecs::entity child) {
-					child.add<TweenNextState, Running>();
-				});
-			};
-		});
-
-	world.observer<Tween>("init (tween, loop)")
-		.term_at(0).second<Loop>()
-		.event(flecs::OnAdd)
-		.each([](flecs::entity e, Tween& tween){
-			tween.processChildren = [](flecs::entity e) {
-				spdlog::info("[loop]: iterate children {}", e.name());
-				e.children([](flecs::entity child) {
-					if (!child.has<TweenNextState, Running>()) {
-						child.add<TweenState, Waiting>();
-						child.add<TweenNextState, Running>();
-					}
-				});
-			};
-		});
-
 	world.system("execute root tween")
 		.with<Tween>(flecs::Wildcard)
 		.with<TweenState, Waiting>()
@@ -202,16 +193,17 @@ TweenModule::TweenModule(flecs::world world) {
 		.self().cascade().desc()
 		.term_at(0).second(flecs::Wildcard)
 		.with<TweenState, Running>()
+		.without<Tween, Single>()
 		.immediate()
 		.kind(Phases::Update)
 		.run([](flecs::iter& it) {
 			while (it.next()) {
-				auto tweens = it.field<Tween>(0);
+				auto tweenType = it.pair(0).second();
 				for (auto i : it) {
 					auto e = it.entity(i);
 					spdlog::info("[tween]: walk from bottom {}", e.name());
 					it.world().defer_suspend();
-					tweens[i].processChildren(e);
+					TweenModule::containerFunctions.at(tweenType)(e);
 					it.world().defer_resume();
 				}
 			}
@@ -231,7 +223,6 @@ TweenModule::TweenModule(flecs::world world) {
 			});
 			e.add<TweenState, Running>();
 			spdlog::info("[tween]: init/reset {}", e.name());
-			spdlog::info("[tween]: has (TweenState, Running) {}", e.has<TweenState, Running>());
 		});
 
 
@@ -239,12 +230,15 @@ TweenModule::TweenModule(flecs::world world) {
 		.self().up()
 		.term_at(0).second(flecs::Wildcard)
 		.with<TweenState, Running>()
+		.without<Tween, Single>()
 		.write<TweenState>(flecs::Wildcard)
 		.write<TweenNextState>(flecs::Wildcard)
 		.kind(Phases::Update)
-		.each([](flecs::entity e, Tween& tween) {
+		.each([](flecs::iter& it, size_t i, Tween) {
+			auto e = it.entity(i);
+			auto tweenId = it.pair(0).second();
 			spdlog::info("[tween]: walk from top {}", e.name());
-			tween.processChildren(e);
+			TweenModule::containerFunctions.at(it.pair(0).second())(e);
 		});
 
 	world.system<TweenTimer>("tween timer reset")
