@@ -16,6 +16,9 @@ if __name__ == '__main__':
 	parser.add_argument('platform', type=str, metavar='platform', help='platform name', default='')
 	args = parser.parse_args()
 
+	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/shader.vert.hlsl', '-o', 'assets/shaders/out/shader.vert.msl'])
+	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/shader.frag.hlsl', '-o', 'assets/shaders/out/shader.frag.msl'])
+
 	if args.clean == True:
 		if os.path.isdir(buildDir):
 			shutil.rmtree(buildDir)
