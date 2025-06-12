@@ -1,8 +1,6 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
-#include "ecsModule/sceneModule/module.h"
-#include <functional>
 #include "ext/matrix_transform.hpp"
 #include "gtc/quaternion.hpp"
 

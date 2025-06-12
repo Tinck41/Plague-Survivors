@@ -1,8 +1,7 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
-#include "ecsModule/sceneModule/module.h"
-#include "raylib.h"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -60,18 +59,86 @@ AppModule::AppModule(flecs::world& world) {
 		.add(flecs::Phase)
 		.depends_on(Phases::RenderUI);
 
-	world.observer<Application>()
-		.event(flecs::OnAdd)
-		.each([](Application& app) {
-			if (app.isVSyncEnabled) {
-				SetConfigFlags(FLAG_VSYNC_HINT);
+	//world.observer<Application>()
+	//	.event(flecs::OnAdd)
+	//	.each([](Application& app) {
+	//		if (app.isVSyncEnabled) {
+	//			SetConfigFlags(FLAG_VSYNC_HINT);
+	//		}
+	//		SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+	//		SetTargetFPS(app.targetFPS);
+	//	});
+
+	world.system<Application>()
+		.term_at(0).singleton()
+		.kind(Phases::OnStart)
+		.each([](flecs::iter& it, size_t i, Application& app) {
+			SDL_Window* window = nullptr;
+
+			SDL_SetAppMetadata("Plague: Survivors", "1.0.0", "");
+
+			if (!SDL_Init(SDL_INIT_VIDEO)) {
+				app.status = SDL_APP_FAILURE;
+
+				return;
 			}
-			SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-			SetTargetFPS(app.targetFPS);
+
+			window = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
+
+			if (!window) {
+				app.status = SDL_APP_FAILURE;
+
+				return;
+			}
+
+			SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
+			SDL_SetLogOutputFunction(
+				[](void *userdata, int category, SDL_LogPriority priority, const char *message) {
+					switch(priority) {
+						case SDL_LOG_PRIORITY_INVALID: { spdlog::info("{}", message); break; };
+						case SDL_LOG_PRIORITY_TRACE: { spdlog::info("{}", message); break; };
+						case SDL_LOG_PRIORITY_VERBOSE: { spdlog::info("{}", message); break; };
+						case SDL_LOG_PRIORITY_DEBUG: { spdlog::debug("{}", message); break; };
+						case SDL_LOG_PRIORITY_INFO: { spdlog::info("{}", message); break; };
+						case SDL_LOG_PRIORITY_WARN: { spdlog::warn("{}", message); break; };
+						case SDL_LOG_PRIORITY_ERROR: { spdlog::error("{}", message); break; };
+						case SDL_LOG_PRIORITY_CRITICAL: { spdlog::critical("{}", message); break; };
+						case SDL_LOG_PRIORITY_COUNT: { spdlog::info("{}", message); break; };
+					}
+				},
+				nullptr
+			);
+
+			it.world().set<Application>({
+				.window = window,
+				.status = SDL_APP_CONTINUE
+			});
 		});
 
-	world.set<Application>({
-		.isVSyncEnabled = true
-	});
+	world.system<Application>()
+		.term_at(0).singleton()
+		.kind(Phases::Clear)
+		.each([](Application& app) {
+			SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderClear(app.renderer);
+		});
 
+	world.system()
+		.kind(Phases::PreUpdate)
+		.each([world] {
+			SDL_Event event;
+			while (SDL_PollEvent(&event)) {
+				if (event.type == SDL_EVENT_QUIT) {
+				}
+			}
+		});
+
+	world.system<Application>()
+		.term_at(0).singleton()
+		.kind(Phases::Display)
+		.each([](Application& app) {
+			SDL_RenderPresent(app.renderer);
+		});
+
+	world.add<Application>();
 }

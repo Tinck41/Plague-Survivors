@@ -251,6 +251,30 @@ UiModule::UiModule(flecs::world& world) {
 			t.translation.y = (grid.offsetY.x + child.size.y + grid.offsetY.y) * item.row;
 		});
 
+	world.system<Node, Node, Transform>()
+		.term_at(0).parent()
+		.kind(Phases::Update)
+		.each([](Node& parent, Node& child, Transform& childTransform) {
+			switch(parent.flex_direction) {
+				case FlexDirection::Row: {
+
+					break;
+				}
+				case FlexDirection::Column: {
+
+					break;
+				}
+				case FlexDirection::RowReverse: {
+
+					break;
+				}
+				case FlexDirection::ColumnReverse: {
+
+					break;
+				}
+			}
+		});
+
 	world.system<Input, Interaction, const Node, const GlobalTransform>()
 		.term_at(0).inout(flecs::InOut).singleton()
 		.kind(Phases::Update)

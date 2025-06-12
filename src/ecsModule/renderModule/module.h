@@ -1,83 +1,62 @@
 #pragma once
 
-#include "raylib.h"
+#include "SDL3/SDL.h"
+#include "mat4x4.hpp"
 #include "flecs.h"
 #include "vec2.hpp"
+#include "vec3.hpp"
+#include "vec4.hpp"
 
-#include <memory>
-#include <variant>
 #include <optional>
 #include <vector>
 #include <string>
 
 namespace ps {
-	struct Window {
-		std::string title;
-		int width;
-		int height;
+	namespace internal {
+		struct VertexData {
+			glm::vec3 position;
+			glm::vec4 color;
+		};
+
+		struct UBO {
+			alignas(16) glm::mat4 mvp;
+		};
+	}
+
+	struct Renderer {
+		SDL_GPUDevice* gpu;
+		SDL_GPUGraphicsPipeline* pipeline;
+		glm::mat4 projection;
 	};
 
-	struct Resized {};
-
-	struct SpriteRenderData {
-		Texture2D texture;
-		Rectangle source;
-		Rectangle dest;
-		Vector2 origin;
-		float rotation;
-		Color color;
+	struct SpritePipeline {
+		SDL_GPUGraphicsPipeline* pipeline;
+		SDL_GPUBuffer* vertex_buffer;
+		SDL_GPUBuffer* index_buffer;
 	};
 
-	struct RectRenderData {
-		Rectangle rec;
-		float rotation;
-		Color color;
-	};
-
-	struct CircleRenderData {
-		glm::vec2 center;
-		float radius;
-		Color color;
-	};
-
-	using RenderData = std::variant<SpriteRenderData, RectRenderData, CircleRenderData>;
-
-	struct RenderCommand {
-		int sortIndex;
-		RenderData renderData;
-	};
-
-	struct RenderCommandDispatcher {
-		void operator()(const SpriteRenderData& data) {
-			DrawTexturePro(data.texture, data.source, data.dest, data.origin, data.rotation, data.color);
-		}
-		void operator()(const RectRenderData& data) {
-			DrawRectanglePro(data.rec, {}, data.rotation, data.color);
-		}
-		void operator()(const CircleRenderData& data) {
-			DrawCircle(data.center.x, data.center.y, data.radius, data.color);
-		}
-	};
-
-	struct RenderQueue {
-		std::vector<RenderCommand> renderCommands;
+	struct Drawable {
+		std::vector<SDL_Vertex> verts;
+		std::vector<int> indices;
+		std::weak_ptr<SDL_Texture> texture;
 	};
 
 	struct Sprite {
-		std::shared_ptr<Texture2D> texture;
-		Color color = WHITE;
-		std::optional<Rectangle> source;
-		Vector2 origin;
+		std::shared_ptr<SDL_Texture> texture;
+		SDL_FColor color{ 1.f, 1.f, 1.f, 1.f };
+		std::optional<glm::vec2> custom_size;
+		std::string path;
+		glm::vec2 origin;
 	};
 
 	struct Circle {
 		float radius;
-		Color color = WHITE;
+		SDL_FColor color;
 	};
 
-	struct Rect {
+	struct Rectangle {
 		glm::vec2 size;
-		Color color = WHITE;
+		SDL_FColor color;
 	};
 
 	struct RenderModule {
