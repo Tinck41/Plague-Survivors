@@ -2,6 +2,7 @@
 
 #include "flecs.h"
 #include "vec2.hpp"
+#include "mat4x4.hpp"
 
 namespace ps {
 	enum class CameraPhases {
@@ -11,6 +12,7 @@ namespace ps {
 
 	struct Camera {
 		glm::vec2 offset;
+		glm::mat4 projection;
 	};
 
 	struct CameraModule {

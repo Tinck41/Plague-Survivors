@@ -6,6 +6,7 @@ using namespace metal;
 struct Input
 {
     float4 color;
+    float2 uv;
 };
 
 struct main0_out
@@ -16,14 +17,17 @@ struct main0_out
 struct main0_in
 {
     float4 in_var_TEXCOORD0 [[user(locn0)]];
+    float2 in_var_TEXCOORD1 [[user(locn1)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]])
+fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler smp [[sampler(0)]])
 {
     main0_out out = {};
-    float4 _20 = in.in_var_TEXCOORD0;
-    float4 _21 = in.in_var_TEXCOORD0;
-    out.out_var_SV_Target0 = in.in_var_TEXCOORD0;
+    float4 _30 = in.in_var_TEXCOORD0;
+    float2 _29 = in.in_var_TEXCOORD1;
+    float4 _39 = tex.sample(smp, in.in_var_TEXCOORD1) * in.in_var_TEXCOORD0;
+    float4 _31 = _39;
+    out.out_var_SV_Target0 = _39;
     return out;
 }
 

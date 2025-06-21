@@ -2,22 +2,24 @@
 
 #include "flecs.h"
 #include "SDL3/SDL.h"
+#include "vec2.hpp"
+
+#include "texture.h"
 
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 namespace ps {
-	using Texture = SDL_Texture;
-
 	class AssetStorage {
 	public:
 		AssetStorage() = default;
 
-		void set_renderer(SDL_Renderer* renderer);
+		void update();
 
-		std::shared_ptr<Texture> load_texture(const std::string& path) const;
+		std::shared_ptr<Texture> load_texture(SDL_GPUDevice& gpu, const std::string& path);
 	private:
-		SDL_Renderer* m_renderer = nullptr;
+		std::unordered_map<std::string, std::shared_ptr<Texture>> textures;
 	};
 
 	struct AssetModule {

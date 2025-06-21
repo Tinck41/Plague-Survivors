@@ -6,7 +6,9 @@
 #include "ecsModule/common.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/appModule/module.h"
+#include "ecsModule/cameraModule/module.h"
 #include "ext/matrix_clip_space.hpp"
+#include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
 
@@ -17,41 +19,18 @@ RenderModule::RenderModule(flecs::world& world) {
 
 	world.import<AppModule>();
 	world.import<TransformModule>();
+	world.import<CameraModule>();
 
 	world.component<Renderer>();
-	world.component<SpritePipeline>();
-	world.component<Drawable>();
-	world.component<Sprite>()
-		.add(flecs::With, world.component<Drawable>())
-		.add(flecs::With, world.component<Transform>());
-	world.component<Rectangle>()
-		.add(flecs::With, world.component<Drawable>())
-		.add(flecs::With, world.component<Transform>());
-	world.component<Circle>()
-		.add(flecs::With, world.component<Drawable>())
-		.add(flecs::With, world.component<Transform>());
+	world.component<Mesh>();
+	world.component<Material>();
+	world.component<ModelMatrix>();
 
 	world.component<SDL_Color>()
 		.member<unsigned char>("r")
 		.member<unsigned char>("g")
 		.member<unsigned char>("b")
 		.member<unsigned char>("a");
-
-	world.component<std::string>()
-		.opaque(flecs::String)
-			.serialize([](const flecs::serializer *s, const std::string *data) {
-				const char *str = data->c_str();
-				return s->value(flecs::String, &str);
-			})
-			.assign_string([](std::string* data, const char *value) {
-				*data = value;
-			});
-
-	world.observer<Sprite>()
-		.event(flecs::OnAdd)
-		.each([](Sprite& s) {
-			// TODO: load sprite via AssetStorage from AssetModule
-		});
 
 	world.system<Application, Renderer>()
 		.term_at(0).singleton()
@@ -74,191 +53,119 @@ RenderModule::RenderModule(flecs::world& world) {
 				return;
 			}
 
-			int width;
-			int height;
-			SDL_GetWindowSize(app.window, &width, &height);
-
-			renderer.gpu = gpu;
-			renderer.projection = glm::perspective(70.f, static_cast<float>(width) / static_cast<float>(height), 0.0001f, 1000.f);
-		});
-
-	world.system<Application, Renderer, SpritePipeline>()
-		.term_at(0).singleton()
-		.term_at(1).singleton()
-		.term_at(2).singleton()
-		.kind(Phases::OnStart)
-		.each([](Application& app, Renderer& r, SpritePipeline& sp) {
-			auto vert_shader = load_shader(*r.gpu, "assets/shaders/out/shader.vert.msl", 1);
-			auto frag_shader = load_shader(*r.gpu, "assets/shaders/out/shader.frag.msl");
-
-			std::array<internal::VertexData, 4> verticies{
-				internal::VertexData{ glm::vec3{ -0.5f,  0.5f, -5.f }, glm::vec4{ 1, 0, 0, 1 } },
-				internal::VertexData{ glm::vec3{  0.5f,  0.5f, -5.f }, glm::vec4{ 1, 0, 0, 1 } },
-				internal::VertexData{ glm::vec3{ -0.5f, -0.5f, -5.f }, glm::vec4{ 0, 1, 0, 1 } },
-				internal::VertexData{ glm::vec3{  0.5f, -0.5f, -5.f }, glm::vec4{ 0, 0, 1, 1 } }
+			auto texture_create_info = SDL_GPUTextureCreateInfo{
+				.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+				.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+				.width = 1,
+				.height = 1,
+				.layer_count_or_depth = 1,
+				.num_levels = 1,
 			};
+			auto white_texture = SDL_CreateGPUTexture(gpu, &texture_create_info);
 
-			std::array<uint16_t, 6> indecies{
-				0, 1, 2,
-				2, 3, 1
+			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+				.size = 4,
 			};
+			auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(gpu, &transfer_buffer_create_info);
+			auto tex_transfer_mem = SDL_MapGPUTransferBuffer(gpu, tex_transfer_buf, false);
 
-			const auto verticies_byte_szie = verticies.size() * sizeof(verticies[0]);
-			const auto indecies_byte_szie = indecies.size() * sizeof(indecies[0]);
+			uint32_t white_pixel = 0xffffffff;
+			std::memcpy(tex_transfer_mem, &white_pixel, 4);
 
-			auto vertex_buf = SDL_CreateGPUBuffer(r.gpu, new SDL_GPUBufferCreateInfo{
-				.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-				.size = verticies_byte_szie,
-			});
+			SDL_UnmapGPUTransferBuffer(gpu, tex_transfer_buf);
 
-			auto index_buf = SDL_CreateGPUBuffer(r.gpu, new SDL_GPUBufferCreateInfo{
-				.usage = SDL_GPU_BUFFERUSAGE_INDEX,
-				.size = indecies_byte_szie,
-			});
-
-			auto transfer_buf = SDL_CreateGPUTransferBuffer(r.gpu, new SDL_GPUTransferBufferCreateInfo{
-				.usage = SDL_GPUTransferBufferUsage::SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-				.size = static_cast<uint32_t>(verticies_byte_szie + indecies_byte_szie)
-			});
-
-			auto transfer_mem = SDL_MapGPUTransferBuffer(r.gpu ,transfer_buf, false);
-
-			std::memcpy(transfer_mem, verticies.data(), verticies_byte_szie);
-			std::memcpy(static_cast<char*>(transfer_mem) + verticies_byte_szie, indecies.data(), indecies_byte_szie);
-
-			SDL_UnmapGPUTransferBuffer(r.gpu, transfer_buf);
-
-			auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(r.gpu);
-
+			auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(gpu);
 			auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
 
-			SDL_UploadToGPUBuffer(copy_pass,
-				new SDL_GPUTransferBufferLocation{ .transfer_buffer = transfer_buf },
-				new SDL_GPUBufferRegion{ .buffer = vertex_buf, .size = static_cast<uint32_t>(verticies_byte_szie) },
-				false
-			);
+			SDL_GPUTextureTransferInfo texture_transfer_info{
+				.transfer_buffer = tex_transfer_buf,
+			};
+			SDL_GPUTextureRegion texture_region{
+				.texture = white_texture,
+				.w = 1,
+				.h = 1,
+				.d = 1,
+			};
 
-			SDL_UploadToGPUBuffer(copy_pass,
-				new SDL_GPUTransferBufferLocation{ .transfer_buffer = transfer_buf, .offset = static_cast<uint32_t>(verticies_byte_szie) },
-				new SDL_GPUBufferRegion{ .buffer = index_buf, .size = static_cast<uint32_t>(indecies_byte_szie) },
-				false
-			);
+			SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
 
 			SDL_EndGPUCopyPass(copy_pass);
+			result = SDL_SubmitGPUCommandBuffer(copy_cmd_buf); assert(result);
 
-			auto result = SDL_SubmitGPUCommandBuffer(copy_cmd_buf);
+			SDL_ReleaseGPUTransferBuffer(gpu, tex_transfer_buf);
 
-			std::array<SDL_GPUVertexAttribute, 2> vertex_attrs{
-				SDL_GPUVertexAttribute{
-					.location = 0,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-					.offset = offsetof(internal::VertexData, position),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 1,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-					.offset = offsetof(internal::VertexData, color),
-				}
-			};
-
-			SDL_GPUGraphicsPipelineCreateInfo pipeline_create_info{
-				.vertex_shader = vert_shader,
-				.fragment_shader = frag_shader,
-				.vertex_input_state = {
-					.vertex_buffer_descriptions = new SDL_GPUVertexBufferDescription{
-						.slot = 0,
-						.pitch = sizeof(internal::VertexData),
-					},
-					.num_vertex_buffers = 1,
-					.vertex_attributes = vertex_attrs.data(),
-					.num_vertex_attributes = vertex_attrs.size(),
-				},
-				.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-				.rasterizer_state = {
-					.cull_mode = SDL_GPU_CULLMODE_NONE,
-					.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
-				},
-				.target_info = {
-					.color_target_descriptions = new SDL_GPUColorTargetDescription{
-						.format = SDL_GetGPUSwapchainTextureFormat(r.gpu, app.window)
-					},
-					.num_color_targets = 1,
-				}
-			};
-
-			auto pipeline = SDL_CreateGPUGraphicsPipeline(r.gpu, &pipeline_create_info);
-
-			if (!pipeline) {
-				print_sdl_error();
-
-				return;
-			}
-
-			SDL_ReleaseGPUShader(r.gpu, vert_shader);
-			SDL_ReleaseGPUShader(r.gpu, frag_shader);
-
-			sp.pipeline = pipeline;
-			sp.index_buffer = index_buf;
-			sp.vertex_buffer = vertex_buf;
+			renderer.gpu = gpu;
+			renderer.white_texture = white_texture;
 		});
 
-	world.system<Application, Renderer, SpritePipeline>()
-		.term_at(0).singleton()
-		.term_at(1).singleton()
-		.term_at(2).singleton()
+
+	world.system<const Mesh, const Material, const ModelMatrix>("render")
 		.kind(Phases::Render)
-		.each([](Application& app, Renderer& renderer, SpritePipeline& sp) {
-			auto cmd_buf = SDL_AcquireGPUCommandBuffer(renderer.gpu);
+		.run([](flecs::iter& it) {
+			const auto app = it.world().get<Application>();
+			const auto renderer = it.world().get<Renderer>();
+			const auto camera = it.world().entity(CameraModule::EcsCamera);
+			const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>()->translation);
+			const auto projection = camera.get<Camera>()->projection;
 
-			SDL_GPUTexture* render_target;
+			auto cmd_buf = SDL_AcquireGPUCommandBuffer(renderer->gpu);
 
-			auto result = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, app.window, &render_target, nullptr, nullptr); assert(result);
+			SDL_GPUTexture* swapchain_texture;
+
+			auto result = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, app->window, &swapchain_texture, nullptr, nullptr); assert(result);
 
 			auto color_target = SDL_GPUColorTargetInfo{
-				.texture = render_target,
-				.clear_color = { 0.f, 1.f, 1.f, 1.f },
+				.texture = swapchain_texture,
+				.clear_color = { 0.f, 0.f, 0.f, 1.f },
 				.load_op = SDL_GPU_LOADOP_CLEAR,
 				.store_op = SDL_GPU_STOREOP_STORE
 			};
 			auto render_pass = SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, nullptr);
 
-			internal::UBO ubo{ 
-				.mvp = renderer.projection
-			};
-			SDL_PushGPUVertexUniformData(cmd_buf, 0, &ubo, sizeof(ubo));
+			while(it.next()) {
+				const auto meshes = it.field<const Mesh>(0);
+				const auto materials = it.field<const Material>(1);
+				const auto model = it.field<const ModelMatrix>(2); // TODO: doesn't update with transform
 
-			SDL_BindGPUGraphicsPipeline(render_pass, sp.pipeline);
-			SDL_BindGPUVertexBuffers(render_pass, 0, new SDL_GPUBufferBinding{ .buffer = sp.vertex_buffer }, 1);
-			SDL_BindGPUIndexBuffer(render_pass, new SDL_GPUBufferBinding{ .buffer = sp.index_buffer }, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+				for (auto i : it) {
+					internal::UBO ubo{ 
+						.mvp = projection * view * model[i].matrix
+					};
 
-			SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+					SDL_GPUBufferBinding vertex_buffer_binding{
+						.buffer = meshes[i].vertex_buffer,
+					};
+					SDL_GPUBufferBinding index_buffer_binding{
+						.buffer = meshes[i].index_buffer,
+					};
+
+					SDL_BindGPUGraphicsPipeline(render_pass, materials[i].pipeline);
+					SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_buffer_binding, 1);
+					SDL_BindGPUIndexBuffer(render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+					SDL_PushGPUVertexUniformData(cmd_buf, 0, &ubo, sizeof(ubo));
+					if (materials[i].sampler && materials[i].texture) {
+						SDL_GPUTextureSamplerBinding texture_sampler_binding{
+							.texture = &materials[i].texture->get_gpu_texture(),
+							.sampler = materials[i].sampler,
+						};
+						SDL_BindGPUFragmentSamplers(render_pass, 0, &texture_sampler_binding, 1);
+					} else {
+						SDL_GPUTextureSamplerBinding texture_sampler_binding{
+							.texture = renderer->white_texture,
+							.sampler = materials[i].sampler,
+						};
+						SDL_BindGPUFragmentSamplers(render_pass, 0, &texture_sampler_binding, 1);
+					}
+
+					SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+				}
+			}
 
 			SDL_EndGPURenderPass(render_pass);
 
 			result &= SDL_SubmitGPUCommandBuffer(cmd_buf); assert(result);
 		});
 
-	world.system()
-		.kind(Phases::OnStart)
-		.each([](flecs::iter& it, size_t i) {
-		auto world = it.world();
-		world.entity()
-			.add<Dirty>()
-			.set<Rectangle>({
-				.size{ 100, 100},
-				.color{ 0, 1, 0, 1 }
-			})
-			.set<Transform>({
-				.rotation{ 15, 0, 0 }
-			});
-
-		world.entity()
-			.add<Dirty>()
-			.set<Sprite>({
-				.texture = world.get_ref<AssetStorage>()->load_texture("assets/main_menu.jpg")
-			});
-		});
-
 	world.add<Renderer>();
-	world.add<SpritePipeline>();
 }

@@ -29,8 +29,8 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_executable(${PROJECT_NAME} 
 	src/main.cpp
-	#src/resourceManager.h
-	#src/resourceManager.cpp
+	src/texture.h
+	src/texture.cpp
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
 	#src/ecsModule/common.h
@@ -40,8 +40,8 @@ add_executable(${PROJECT_NAME}
 	#src/ecsModule/physicsModule/module.cpp
 	#src/ecsModule/timeModule/module.h
 	#src/ecsModule/timeModule/module.cpp
-	#src/ecsModule/cameraModule/module.h
-	#src/ecsModule/cameraModule/module.cpp
+	src/ecsModule/cameraModule/module.h
+	src/ecsModule/cameraModule/module.cpp
 	#src/ecsModule/inputModule/module.h
 	#src/ecsModule/inputModule/module.cpp
 	#src/ecsModule/playerModule/module.h
@@ -54,6 +54,8 @@ add_executable(${PROJECT_NAME}
 	#src/ecsModule/sceneModule/module.cpp
 	src/ecsModule/renderModule/module.h
 	src/ecsModule/renderModule/module.cpp
+	src/ecsModule/spriteModule/module.h
+	src/ecsModule/spriteModule/module.cpp
 	#src/ecsModule/tweenModule/module.h
 	#src/ecsModule/tweenModule/module.cpp
 	src/ecsModule/utils.h
