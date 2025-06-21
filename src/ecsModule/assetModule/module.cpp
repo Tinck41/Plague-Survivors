@@ -1,22 +1,79 @@
 #include "module.h"
 
 #include "SDL3_image/SDL_image.h"
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/renderModule/module.h"
 #include "ecsModule/common.h"
-
-#include <unordered_map>
 
 using namespace ps;
 
-std::unordered_map<std::string, std::shared_ptr<Texture>> textures;
+void AssetStorage::update() {
+	auto it = textures.begin();
 
-void AssetStorage::set_renderer(SDL_Renderer* renderer) {
-	m_renderer = renderer;
+	while (it != textures.end()) {
+		if (it->second.use_count() == 0) {
+			it = textures.erase(it);
+		} else {
+			++it;
+		}
+	}
 }
 
-std::shared_ptr<Texture> AssetStorage::load_texture(const std::string& path) const {
+std::shared_ptr<Texture> AssetStorage::load_texture(SDL_GPUDevice& gpu, const std::string& path) {
+	if (path.empty()) {
+		return nullptr;
+	}
+
 	if (!textures.contains(path)) {
-		textures[path] = std::shared_ptr<SDL_Texture>(IMG_LoadTexture(m_renderer, path.c_str()), SDL_DestroyTexture);
+		SDL_Surface* img = IMG_Load(path.c_str());
+		SDL_Surface* image = SDL_ConvertSurface(img, SDL_PIXELFORMAT_RGBA32);
+		SDL_GPUTextureCreateInfo texture_create_info{
+			.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+			.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+			.width = static_cast<uint32_t>(image->w),
+			.height = static_cast<uint32_t>(image->h),
+			.layer_count_or_depth = 1,
+			.num_levels = 1,
+		};
+
+		SDL_GPUTexture* texture = SDL_CreateGPUTexture(&gpu, &texture_create_info);
+
+		const auto image_byte_size = image->w * image->h * 4;
+
+		SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size = static_cast<uint32_t>(image_byte_size),
+		};
+		auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(&gpu, &transfer_buffer_create_info);
+
+		auto tex_transfer_mem = SDL_MapGPUTransferBuffer(&gpu, tex_transfer_buf, false);
+
+		std::memcpy(tex_transfer_mem, image->pixels, image_byte_size);
+
+		SDL_UnmapGPUTransferBuffer(&gpu, tex_transfer_buf);
+
+		auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(&gpu);
+		auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
+
+		SDL_GPUTextureTransferInfo texture_transfer_info{
+			.transfer_buffer = tex_transfer_buf,
+		};
+		SDL_GPUTextureRegion texture_region{
+			.texture = texture,
+			.w = static_cast<uint32_t>(image->w),
+			.h = static_cast<uint32_t>(image->h),
+			.d = 1,
+		};
+
+		SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
+
+		SDL_EndGPUCopyPass(copy_pass);
+		auto result = SDL_SubmitGPUCommandBuffer(copy_cmd_buf); assert(result);
+
+		textures[path] = std::make_shared<Texture>(&gpu, texture, glm::vec2{ image->w, image->h });
+
+		SDL_ReleaseGPUTransferBuffer(&gpu, tex_transfer_buf);
+		SDL_DestroySurface(image);
+		SDL_DestroySurface(img);
 	}
 
 	return textures.at(path);
@@ -25,31 +82,15 @@ std::shared_ptr<Texture> AssetStorage::load_texture(const std::string& path) con
 AssetModule::AssetModule(flecs::world& world) {
 	world.module<AssetModule>();
 
-	world.import<AppModule>();
+	world.import<RenderModule>();
 
 	world.component<AssetStorage>();
-
-	world.system<Application, AssetStorage>()
-		.term_at(0).singleton()
-		.term_at(1).singleton()
-		.kind(Phases::OnStart)
-		.each([](Application& app, AssetStorage& storage) {
-			storage.set_renderer(app.renderer);
-		});
 
 	world.system<AssetStorage>()
 		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](AssetStorage& storage) {
-			auto it = textures.begin();
-
-			while (it != textures.end()) {
-				if (it->second.use_count() == 0) {
-					it = textures.erase(it);
-				} else {
-					++it;
-				}
-			}
+			storage.update();
 		});
 
 	world.add<AssetStorage>();

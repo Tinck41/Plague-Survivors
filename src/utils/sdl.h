@@ -7,5 +7,5 @@
 namespace ps {
 	void print_sdl_error();
 
-	SDL_GPUShader* load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf = 0);
+	SDL_GPUShader* load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf = 0, uint32_t num_samplers = 0);
 }

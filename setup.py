@@ -5,7 +5,7 @@ import shutil
 
 
 if __name__ == '__main__':
-	buildFolder = 'build'
+	buildFolder = 'build/xcode'
 	repoDir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 	buildDir = os.path.join(repoDir, buildFolder)
 
@@ -42,15 +42,15 @@ if __name__ == '__main__':
 
 		cmake.append('-S .')
 		cmake.append('-B ' + buildFolder)
-		cmake.append('-GNinja')
+		cmake.append('-GXcode')
 		cmake.append(('-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_BUILD_TYPE=Release')[args.rel])
 		cmake.append(('-DCMAKE_EXPORT_COMPILE_COMMANDS=False', '-DCMAKE_EXPORT_COMPILE_COMMANDS=True')[args.vim])
 
 		print(cmake)
-		subprocess.run(cmake)
+		#subprocess.run(cmake)
 
 		if args.vim:
 			subprocess.run(['mv', './build/compile_commands.json', './'])
 
-		subprocess.run(['cmake', '--build', buildFolder])
+		#subprocess.run(['cmake', '--build', buildFolder])
 
