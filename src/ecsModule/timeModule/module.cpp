@@ -8,6 +8,7 @@ TimeModule::TimeModule(flecs::world& world) {
 	world.module<TimeModule>();
 
 	world.component<Time>()
+		.add(flecs::Singleton)
 		.member<float>("deltaTime");
 
 	world.observer<Time>()
@@ -18,7 +19,6 @@ TimeModule::TimeModule(flecs::world& world) {
 		});
 
 	world.system<Time>()
-		.term_at(0).singleton()
 		.kind(flecs::OnStore)
 		.each([](Time& t) {
 			t.deltaTime = GetFrameTime();

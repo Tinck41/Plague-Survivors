@@ -13,7 +13,7 @@ constexpr const char* WINDOW_TITLE = "Plague: Survivors";
 AppModule::AppModule(flecs::world& world) {
 	world.module<AppModule>();
 
-	world.component<Application>();
+	world.component<Application>().add(flecs::Singleton);
 
 	world.entity(Phases::OnStart)
 		.add(flecs::Phase)
@@ -70,7 +70,6 @@ AppModule::AppModule(flecs::world& world) {
 	//	});
 
 	world.system<Application>()
-		.term_at(0).singleton()
 		.kind(Phases::OnStart)
 		.each([](flecs::iter& it, size_t i, Application& app) {
 			SDL_Window* window = nullptr;
@@ -116,7 +115,6 @@ AppModule::AppModule(flecs::world& world) {
 		});
 
 	world.system<Application>()
-		.term_at(0).singleton()
 		.kind(Phases::Clear)
 		.each([](Application& app) {
 			SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -134,7 +132,6 @@ AppModule::AppModule(flecs::world& world) {
 		});
 
 	world.system<Application>()
-		.term_at(0).singleton()
 		.kind(Phases::Display)
 		.each([](Application& app) {
 			SDL_RenderPresent(app.renderer);

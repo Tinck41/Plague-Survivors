@@ -26,7 +26,7 @@ UiModule::UiModule(flecs::world& world) {
 	world.component<Pivot>();
 	world.component<BackgroundColor>();
 	world.component<Interaction>();
-	world.component<UiRenderQueue>();
+	world.component<UiRenderQueue>().add(flecs::Singleton);
 	world.component<Node>()
 		.add(flecs::With, world.component<Transform>())
 		.add(flecs::With, world.component<Anchor>())
@@ -276,7 +276,7 @@ UiModule::UiModule(flecs::world& world) {
 		});
 
 	world.system<Input, Interaction, const Node, const GlobalTransform>()
-		.term_at(0).inout(flecs::InOut).singleton()
+		.term_at(0).inout(flecs::InOut)
 		.kind(Phases::Update)
 		.order_by<GlobalTransform>([](flecs::entity_t e1, const GlobalTransform *d1, flecs::entity_t e2, const GlobalTransform *d2) {
 			return (d1->translation.z < d2->translation.z) - (d1->translation.z > d2->translation.z);
@@ -331,7 +331,6 @@ UiModule::UiModule(flecs::world& world) {
 		});
 
 	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Primitive>()
-		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Primitive& p) {
 			queue.renderCommands.emplace_back(
@@ -345,7 +344,6 @@ UiModule::UiModule(flecs::world& world) {
 		});
 
 	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Image>()
-		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Image& i) {
 			const auto source = [i]() {
@@ -369,7 +367,6 @@ UiModule::UiModule(flecs::world& world) {
 		});
 
 	world.system<UiRenderQueue, Node, GlobalTransform, BackgroundColor, Text>()
-		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](UiRenderQueue& queue, Node& n, GlobalTransform& t, BackgroundColor& c, Text& text) {
 			queue.renderCommands.emplace_back(
@@ -388,7 +385,6 @@ UiModule::UiModule(flecs::world& world) {
 
 
 	world.system<UiRenderQueue>("NodeRenderSystem")
-		.term_at(0).singleton()
 		.kind(Phases::RenderUI)
 		.each([](UiRenderQueue& queue) {
 			std::ranges::sort(queue.renderCommands, [](const UiRenderCommand& lhs, const UiRenderCommand& rhs) {

@@ -56,6 +56,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/renderModule/module.cpp
 	src/ecsModule/spriteModule/module.h
 	src/ecsModule/spriteModule/module.cpp
+	src/ecsModule/meshModule/module.h
+	src/ecsModule/meshModule/module.cpp
 	#src/ecsModule/tweenModule/module.h
 	#src/ecsModule/tweenModule/module.cpp
 	src/ecsModule/utils.h

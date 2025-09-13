@@ -1,0 +1,9 @@
+using ps.TransformModule
+using ps.RenderModule
+using ps.CameraModule
+
+ps.CameraModule.EcsCamera {
+	Camera
+	Velocity: { 7, 7 }
+}
+

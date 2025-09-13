@@ -10,7 +10,7 @@ void ps::print_sdl_error() {
 }
 
 
-SDL_GPUShader* ps::load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf, uint32_t num_samplers) {
+SDL_GPUShader* ps::load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf, uint32_t num_samplers, uint32_t num_storage_buf) {
 	std::ifstream file;
 	SDL_GPUShaderStage stage;
 
@@ -37,6 +37,7 @@ SDL_GPUShader* ps::load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32
 		.format = SDL_GPU_SHADERFORMAT_MSL,
 		.stage = stage,
 		.num_samplers = num_samplers,
+		.num_storage_buffers = num_storage_buf,
 		.num_uniform_buffers = num_uniform_buf,
 	};
 

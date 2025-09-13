@@ -27,20 +27,23 @@ namespace ps {
 		};
 	}
 
+	struct RenderDevice {
+		SDL_GPUDevice* gpu;
+	};
+
+	struct RenderPass {
+		SDL_GPUCommandBuffer* cmd_buffer;
+		SDL_GPURenderPass* render_pass;
+		SDL_GPUTexture* swapchain_texture;
+	};
+
+	struct WhiteTexture {
+		SDL_GPUTexture* texture;
+	};
+
 	struct Renderer {
 		SDL_GPUDevice* gpu;
 		SDL_GPUTexture* white_texture;
-	};
-
-	struct Mesh {
-		SDL_GPUBuffer* vertex_buffer;
-		SDL_GPUBuffer* index_buffer;
-	};
-
-	struct Material {
-		SDL_GPUGraphicsPipeline* pipeline;
-		std::shared_ptr<Texture> texture;
-		SDL_GPUSampler* sampler;
 	};
 
 	struct ModelMatrix {

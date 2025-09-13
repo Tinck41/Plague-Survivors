@@ -61,7 +61,6 @@ PlayerModule::PlayerModule(flecs::world& world) {
 		});
 
 	world.system<Input, Velocity, Direction, Player>()
-		.term_at(0).singleton()
 		.without(ePlayerState::Dashing)
 		.kind(Phases::Update)
 		.each([](flecs::entity e, Input& i, Velocity& v, Direction& d, const Player& p) {
@@ -116,7 +115,6 @@ PlayerModule::PlayerModule(flecs::world& world) {
 		});
 
 	world.system<Time, DashData>()
-		.term_at(0).singleton()
 		.kind(Phases::Update)
 		.each([](flecs::entity e, Time& t, DashData& d) {
 			d.timer += t.deltaTime;
@@ -127,7 +125,6 @@ PlayerModule::PlayerModule(flecs::world& world) {
 		});
 
 	world.system<const Time, Transform, const Velocity, const Transform>()
-		.term_at(0).singleton()
 		.term_at(1).src(CameraModule::EcsCamera)
 		.term_at(2).src(CameraModule::EcsCamera)
 		.with<CameraTarget>()
@@ -137,7 +134,6 @@ PlayerModule::PlayerModule(flecs::world& world) {
 		});
 
 	world.system<const Time, CameraShakeData, Transform, Camera>()
-		.term_at(0).singleton()
 		.term_at(1).singleton()
 		.each([](flecs::entity e, const Time& t, CameraShakeData& shake, Transform& ct, Camera&){ 
 			auto& data = shake.stateData[shake.currentState];
