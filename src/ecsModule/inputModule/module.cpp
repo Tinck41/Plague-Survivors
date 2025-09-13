@@ -159,7 +159,7 @@ InputModule::InputModule(flecs::world& world) {
 
 	world.import<RenderModule>();
 
-	world.component<Input>();
+	world.component<Input>().add(flecs::Singleton);
 
 	world.set<Input>({});
 

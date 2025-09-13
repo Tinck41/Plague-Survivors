@@ -28,7 +28,6 @@ CameraModule::CameraModule(flecs::world& world) {
 		.member<glm::vec2>("offset");
 
 	world.system<Application, Camera>()
-		.term_at(0).singleton()
 		.kind(Phases::OnStart)
 		.each([](Application& app, Camera& c) {
 			int width;
