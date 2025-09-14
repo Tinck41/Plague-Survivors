@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <memory>
+#include <vector>
 
 namespace ps {
 	struct Sprite {
@@ -21,13 +22,13 @@ namespace ps {
 		std::shared_ptr<Texture> texture;
 	};
 
-	struct SpriteData {
-		alignas(16) glm::vec3 position;
-		float rotation;
-		glm::vec2 scale;
-		glm::vec2 padding;
-		float u, v, w, h;
+	struct SpriteInstance {
+		glm::vec4 translation;
+		glm::vec4 rotation;
+		glm::vec4 scale;
 		glm::vec4 color;
+		glm::vec2 uv;
+		glm::vec2 size;
 	};
 	
 	struct SpritePipeline {
@@ -35,11 +36,20 @@ namespace ps {
 		SDL_GPUSampler* sampler;
 	};
 
-	struct SpriteRenderer {
+	struct SpriteStorage {
+		SDL_GPUBuffer* index_buffer;
+		SDL_GPUBuffer* instance_buffer;
+	};
+
+	struct SpriteBatch {
+		//SpriteInstance* data;
+		uint32_t size;
+		uint32_t first_instance;
 		std::shared_ptr<Texture> texture;
-		SDL_GPUGraphicsPipeline* pipeline;
-		SDL_GPUSampler* sampler;
-		SDL_GPUBuffer* buffer;
+	};
+
+	struct SpriteBatches {
+		std::vector<SpriteBatch> batches;
 		SDL_GPUTransferBuffer* transfer_buffer;
 	};
 

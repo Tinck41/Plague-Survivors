@@ -19,11 +19,11 @@ MeshModule::MeshModule(flecs::world& world) {
 		.each([](RenderDevice& device, QuadMesh& quad) {
 			constexpr auto white = glm::vec4{ 1, 1, 1, 1 };
 
-			std::array<internal::VertexData, 4> verticies{
-				internal::VertexData{ glm::vec3{ 0.f, 1.f, 0.f }, white, { 0.f, 1.f }},
-				internal::VertexData{ glm::vec3{ 1.f, 1.f, 0.f }, white, { 1.f, 1.f }},
-				internal::VertexData{ glm::vec3{ 1.f, 0.f, 0.f }, white, { 1.f, 0.f }},
-				internal::VertexData{ glm::vec3{ 0.f, 0.f, 0.f }, white, { 0.f, 0.f }}
+			std::array<VertexData, 4> verticies{
+				VertexData{ glm::vec3{ 0.f, 1.f, 0.f }, white, { 0.f, 1.f }},
+				VertexData{ glm::vec3{ 1.f, 1.f, 0.f }, white, { 1.f, 1.f }},
+				VertexData{ glm::vec3{ 1.f, 0.f, 0.f }, white, { 1.f, 0.f }},
+				VertexData{ glm::vec3{ 0.f, 0.f, 0.f }, white, { 0.f, 0.f }}
 			};
 
 			std::array<uint16_t, 6> indecies{
