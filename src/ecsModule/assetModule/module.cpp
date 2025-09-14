@@ -84,7 +84,7 @@ AssetModule::AssetModule(flecs::world& world) {
 
 	world.import<RenderModule>();
 
-	world.component<AssetStorage>().add(flecs::Singleton);
+	world.component<AssetStorage>().add(flecs::Singleton) ;
 
 	world.system<AssetStorage>()
 		.kind(Phases::Update)
