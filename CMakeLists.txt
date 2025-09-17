@@ -42,8 +42,8 @@ add_executable(${PROJECT_NAME}
 	#src/ecsModule/timeModule/module.cpp
 	src/ecsModule/cameraModule/module.h
 	src/ecsModule/cameraModule/module.cpp
-	#src/ecsModule/inputModule/module.h
-	#src/ecsModule/inputModule/module.cpp
+	src/ecsModule/inputModule/module.h
+	src/ecsModule/inputModule/module.cpp
 	#src/ecsModule/playerModule/module.h
 	#src/ecsModule/playerModule/module.cpp
 	src/ecsModule/transformModule/module.h

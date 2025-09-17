@@ -106,7 +106,7 @@ RenderModule::RenderModule(flecs::world& world) {
 		});
 
 	world.system<Application, RenderDevice, RenderCommands>()
-		.kind(Phases::PreRender)
+		.kind(Phases::Clear)
 		.each([](Application& app, RenderDevice& device, RenderCommands& render_commands) {
 			render_commands.cmd_buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
 
@@ -125,13 +125,12 @@ RenderModule::RenderModule(flecs::world& world) {
 		});
 
 	world.system<RenderCommands>()
-		.kind(Phases::PostRender)
+		.kind(Phases::Display)
 		.each([](RenderCommands& render_commands) {
 			SDL_EndGPURenderPass(render_commands.render_pass);
-
 			SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
-			assert(SDL_SubmitGPUCommandBuffer(render_commands.cmd_buffer) && SDL_GetError());
 
+			assert(SDL_SubmitGPUCommandBuffer(render_commands.cmd_buffer) && SDL_GetError());
 		});
 
 	world.add<RenderDevice>();

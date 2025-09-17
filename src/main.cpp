@@ -5,6 +5,7 @@
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/meshModule/module.h"
+#include "ecsModule/inputModule/module.h"
 
 #include "flecs.h"
 #include "spdlog/spdlog.h"
@@ -19,9 +20,9 @@ int main() {
 	world.import<ps::RenderModule>();
 	world.import<ps::SpriteModule>();
 	world.import<ps::MeshModule>();
+	world.import<ps::InputModule>();
 	//world.import<ps::SceneModule>();
 	//world.import<ps::TimeModule>();
-	//world.import<ps::InputModule>();
 	//world.import<ps::UiModule>();
 	//world.import<ps::PhysicsModule>();
 	//world.import<ps::PlayerModule>();
@@ -35,7 +36,10 @@ int main() {
 	//world.script().filename("assets/scripts/gameScene.flecs").run();
 	world.script().filename("assets/scripts/sandbox.flecs").run();
 
-	while(world.progress()) {
+	auto& app = world.get<ps::Application>();
+
+	while(app.is_running) {
 		//spdlog::info("----------------------tick---------------------");
+		world.progress();
 	}
 }

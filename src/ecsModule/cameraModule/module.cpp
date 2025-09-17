@@ -7,6 +7,7 @@
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/appModule/module.h"
 #include "ext/matrix_clip_space.hpp"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -32,9 +33,37 @@ CameraModule::CameraModule(flecs::world& world) {
 		.each([](Application& app, Camera& c) {
 			int width;
 			int height;
+
 			SDL_GetWindowSize(app.window, &width, &height);
+
 			c.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
 		});
+
+	world.observer<Camera>()
+		.event<WindowResized>()
+		.each([world](Camera& camera) {
+			int width;
+			int height;
+
+			SDL_GetWindowSize(world.get<Application>().window, &width, &height);
+
+			camera.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
+		});
+
+	//world.system<Application, Camera>()
+	//	.kind(Phases::Update)
+	//	.each([](Application& app, Camera& c) {
+	//		if (!app.window_resized) {
+	//			return;
+	//		}
+
+	//		int width;
+	//		int height;
+
+	//		SDL_GetWindowSize(app.window, &width, &height);
+
+	//		c.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
+	//	});
 
 	//world.system<Window, Camera, Transform>()
 	//	.term_at(0).singleton()

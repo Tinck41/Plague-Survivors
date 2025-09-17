@@ -2,6 +2,7 @@
 
 #include "ecsModule/common.h"
 #include "spdlog/spdlog.h"
+#include "ecsModule/cameraModule/module.h"
 
 using namespace ps;
 
@@ -72,8 +73,6 @@ AppModule::AppModule(flecs::world& world) {
 	world.system<Application>()
 		.kind(Phases::OnStart)
 		.each([](flecs::iter& it, size_t i, Application& app) {
-			SDL_Window* window = nullptr;
-
 			SDL_SetAppMetadata("Plague: Survivors", "1.0.0", "");
 
 			if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -82,9 +81,9 @@ AppModule::AppModule(flecs::world& world) {
 				return;
 			}
 
-			window = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
+			app.window = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
 
-			if (!window) {
+			if (!app.window) {
 				app.status = SDL_APP_FAILURE;
 
 				return;
@@ -108,33 +107,7 @@ AppModule::AppModule(flecs::world& world) {
 				nullptr
 			);
 
-			it.world().set<Application>({
-				.window = window,
-				.status = SDL_APP_CONTINUE
-			});
-		});
-
-	world.system<Application>()
-		.kind(Phases::Clear)
-		.each([](Application& app) {
-			SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-			SDL_RenderClear(app.renderer);
-		});
-
-	world.system()
-		.kind(Phases::PreUpdate)
-		.each([world] {
-			SDL_Event event;
-			while (SDL_PollEvent(&event)) {
-				if (event.type == SDL_EVENT_QUIT) {
-				}
-			}
-		});
-
-	world.system<Application>()
-		.kind(Phases::Display)
-		.each([](Application& app) {
-			SDL_RenderPresent(app.renderer);
+			app.status = SDL_APP_CONTINUE;
 		});
 
 	world.add<Application>();
