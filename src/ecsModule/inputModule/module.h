@@ -2,12 +2,13 @@
 
 #include "flecs.h"
 #include "vec2.hpp"
+
 #include <unordered_map>
 
 namespace ps {
 	enum class Key {
 		Unknown = -1, //!< Unhandled key
-		A       = 0,  //!< The A key
+		A       =  0, //!< The A key
 		B,            //!< The B key
 		C,            //!< The C key
 		D,            //!< The D key

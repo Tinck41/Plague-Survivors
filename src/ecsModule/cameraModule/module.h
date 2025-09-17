@@ -5,11 +5,6 @@
 #include "mat4x4.hpp"
 
 namespace ps {
-	enum class CameraPhases {
-		BeginCameraMode,
-		EndCameraMode,
-	};
-
 	struct Camera {
 		glm::vec2 offset;
 		glm::mat4 projection;

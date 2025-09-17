@@ -149,11 +149,6 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				.size = max_sprites_per_batch * sizeof(SpriteInstance),
 			};
 
-			const auto buffer_create_info = SDL_GPUBufferCreateInfo{
-				.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-				.size = max_sprites_per_batch * sizeof(SpriteInstance),
-			};
-
 			batches.transfer_buffer = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
 		});
 
