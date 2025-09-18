@@ -21,6 +21,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/spdlog)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glm)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_image)
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_ttf)
 
 include_directories(${CMAKE_SOURCE_DIR}/vendor/box2d/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
@@ -31,6 +32,8 @@ add_executable(${PROJECT_NAME}
 	src/main.cpp
 	src/texture.h
 	src/texture.cpp
+	src/font.h
+	src/font.cpp
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
 	#src/ecsModule/common.h
@@ -56,6 +59,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/renderModule/module.cpp
 	src/ecsModule/spriteModule/module.h
 	src/ecsModule/spriteModule/module.cpp
+	src/ecsModule/textModule/module.h
+	src/ecsModule/textModule/module.cpp
 	src/ecsModule/meshModule/module.h
 	src/ecsModule/meshModule/module.cpp
 	#src/ecsModule/tweenModule/module.h
@@ -73,6 +78,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
 target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_image::SDL3_image)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_ttf::SDL3_ttf)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )

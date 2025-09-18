@@ -2,6 +2,7 @@
 #include "ecsModule/assetModule/module.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/spriteModule/module.h"
+#include "ecsModule/textModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/meshModule/module.h"
@@ -12,13 +13,13 @@
 
 int main() {
 	flecs::world world;
-
 	world.import<ps::AppModule>();
 	world.import<ps::AssetModule>();
 	world.import<ps::TransformModule>();
 	world.import<ps::CameraModule>();
 	world.import<ps::RenderModule>();
 	world.import<ps::SpriteModule>();
+	world.import<ps::TextModule>();
 	world.import<ps::MeshModule>();
 	world.import<ps::InputModule>();
 	//world.import<ps::SceneModule>();

@@ -79,6 +79,15 @@ std::shared_ptr<Texture> AssetStorage::load_texture(SDL_GPUDevice& gpu, const st
 	return textures.at(path);
 }
 
+std::shared_ptr<Font> AssetStorage::load_font(const std::string& path, float size) {
+	if (!fonts.contains(path)) {
+		TTF_Font* resource = TTF_OpenFont(path.c_str(), size);
+		fonts[path] = std::make_shared<Font>(resource);
+	}
+
+	return fonts.at(path);
+}
+
 AssetModule::AssetModule(flecs::world& world) {
 	world.module<AssetModule>();
 
