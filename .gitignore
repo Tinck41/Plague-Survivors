@@ -1,8 +1,10 @@
 /*.pdb
 /*.exe
 /*.dll
+/*.pyc
 /build/*
 /.cache/*
 \.DS_Store
+__pycache__/
 compile_commands.json
 Plague-Survivors
