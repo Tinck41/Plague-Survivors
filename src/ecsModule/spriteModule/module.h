@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ecsModule/transformModule/module.h"
 #include "flecs.h"
 #include "SDL3/SDL.h"
 #include "vec2.hpp"
@@ -10,6 +11,7 @@
 #include <optional>
 #include <memory>
 #include <map>
+#include <vector>
 
 namespace ps {
 	struct Sprite {
@@ -18,6 +20,16 @@ namespace ps {
 		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f };
 		std::shared_ptr<Texture> texture;
 	};
+
+	struct SpriteRenderData {
+		flecs::entity_t entity;
+		std::shared_ptr<Texture> texture;
+		std::optional<glm::vec2> custom_size;
+		Transform transform;
+		glm::vec4 color;
+	};
+
+	using SpritesRenderData = std::vector<SpriteRenderData>;
 
 	struct SpriteInstance {
 		glm::vec4 translation;
@@ -48,9 +60,7 @@ namespace ps {
 		std::shared_ptr<Texture> texture;
 	};
 
-	struct SpriteBatches {
-		std::map<flecs::entity_t, SpriteBatch> batches;
-	};
+	using SpriteBatches = std::map<flecs::entity_t, SpriteBatch>;
 
 	struct SpriteModule {
 		SpriteModule(flecs::world& world);

@@ -18,8 +18,8 @@ int main() {
 	world.import<ps::TransformModule>();
 	world.import<ps::CameraModule>();
 	world.import<ps::RenderModule>();
-	world.import<ps::SpriteModule>();
 	world.import<ps::TextModule>();
+	world.import<ps::SpriteModule>();
 	world.import<ps::MeshModule>();
 	world.import<ps::InputModule>();
 	//world.import<ps::SceneModule>();
