@@ -21,33 +21,22 @@ cbuffer UniformBlock : register(b0, space1)
 };
 
 Output main(Input input) {
-    Output output;
+	Output output;
 
-    // Генерация вершин квадрата из vertex_id (6 вершин → два треугольника)
-    uint corner = (input.vertex_id == 0 || input.vertex_id == 5) ? 0 :
-                  (input.vertex_id == 1 || input.vertex_id == 2) ? 1 :
-                  (input.vertex_id == 3) ? 2 : 3;
+	float2 vertex_pos = float2(input.vertex_id & 1, input.vertex_id >> 1);
 
-    float2 vertex_pos = float2(
-        (corner & 1),          // x = 0 или 1
-        (corner >> 1)          // y = 0 или 1
-    );
+	float2 uv = input.uv + vertex_pos * input.size;
 
-    // UV-координаты
-    float2 uv = input.uv + vertex_pos * input.size;
+	float c = cos(input.rotation.z);
+	float s = sin(input.rotation.z);
+	float2x2 rot = { c, s, -s, c };
 
-    // Вращение
-    float c = cos(input.rotation.z);
-    float s = sin(input.rotation.z);
-    float2x2 rot = { c, s, -s, c };
+	float2 local = mul(vertex_pos * input.scale.xy, rot);
+	float3 world = float3(local + input.position.xy, input.position.z);
 
-    // Позиция вершины
-    float2 local = mul(vertex_pos * input.scale.xy, rot);
-    float3 world = float3(local + input.position.xy, input.position.z);
+	output.position = mul(view_proj, float4(world, 1.0));
+	output.color = input.color;
+	output.uv = uv;
 
-    output.position = mul(view_proj, float4(world, 1.0));
-    output.color = input.color;
-    output.uv = uv;
-
-    return output;
+	return output;
 }
