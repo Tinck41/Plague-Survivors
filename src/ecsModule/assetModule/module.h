@@ -2,9 +2,10 @@
 
 #include "flecs.h"
 #include "SDL3/SDL.h"
-#include "vec2.hpp"
+#include "SDL3_ttf/SDL_ttf.h"
 
 #include "texture.h"
+#include "font.h"
 
 #include <string>
 #include <memory>
@@ -18,8 +19,10 @@ namespace ps {
 		void update();
 
 		std::shared_ptr<Texture> load_texture(SDL_GPUDevice& gpu, const std::string& path);
+		std::shared_ptr<Font> load_font(const std::string& path, float size);
 	private:
 		std::unordered_map<std::string, std::shared_ptr<Texture>> textures;
+		std::unordered_map<std::string, std::shared_ptr<Font>> fonts;
 	};
 
 	struct AssetModule {
