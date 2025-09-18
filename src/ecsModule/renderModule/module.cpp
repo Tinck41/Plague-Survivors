@@ -11,6 +11,7 @@
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
+#include <algorithm>
 
 using namespace ps;
 
@@ -25,6 +26,7 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<RenderCommands>().add(flecs::Singleton);
 	world.component<RenderDevice>().add(flecs::Singleton);
 	world.component<WhiteTexture>().add(flecs::Singleton);
+	world.component<RenderItems>().add(flecs::Singleton);
 
 	world.component<SDL_Color>()
 		.member<unsigned char>("r")
@@ -124,6 +126,27 @@ RenderModule::RenderModule(flecs::world& world) {
 			SDL_PushGPUDebugGroup(render_commands.cmd_buffer, "render");
 		});
 
+	world.system<RenderItems>()
+		.kind(Phases::Render)
+		.each([world](RenderItems& items) {
+			std::ranges::sort(items, [](const RenderItem& lhs, const RenderItem& rhs) {
+				if (lhs.sort_value == rhs.sort_value) {
+					return lhs.entity < rhs.entity;
+				}
+				return lhs.sort_value < rhs.sort_value;
+			});
+
+			for (const auto& item : items) {
+				item.draw_function(item.entity, world);
+			}
+		});
+
+	world.system<RenderItems>()
+		.kind(Phases::PostRender)
+		.each([](RenderItems& items) {
+			items.clear();
+		});
+
 	world.system<RenderCommands>()
 		.kind(Phases::Display)
 		.each([](RenderCommands& render_commands) {
@@ -137,4 +160,5 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.add<CopyCommands>();
 	world.add<RenderCommands>();
 	world.add<WhiteTexture>();
+	world.add<RenderItems>();
 }

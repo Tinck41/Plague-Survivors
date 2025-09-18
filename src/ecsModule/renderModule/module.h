@@ -9,6 +9,7 @@
 
 #include "texture.h"
 
+#include <functional>
 #include <optional>
 #include <vector>
 #include <string>
@@ -32,6 +33,14 @@ namespace ps {
 	struct WhiteTexture {
 		SDL_GPUTexture* texture;
 	};
+
+	struct RenderItem {
+		flecs::entity_t entity;
+		float sort_value;
+		std::function<void(flecs::entity_t, const flecs::world&)> draw_function;
+	};
+
+	using RenderItems = std::vector<RenderItem>;
 
 	struct RenderModule {
 		RenderModule(flecs::world& world);

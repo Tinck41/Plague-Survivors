@@ -15,12 +15,50 @@ using namespace ps;
 
 constexpr uint32_t max_sprites_per_batch = 10'000;
 
+void draw_sprite(flecs::entity_t entity, const flecs::world& world) {
+	const auto& batches = world.get<SpriteBatches>();
+
+	if (!batches.batches.contains(entity)) {
+		return;
+	}
+
+	const auto& pipeline = world.get<SpritePipeline>();
+	const auto& storage = world.get<SpriteStorage>();
+	const auto& render_commands = world.get<RenderCommands>();
+
+	const auto camera = world.entity(CameraModule::EcsCamera);
+	const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
+	const auto view_proj = view * camera.get<Camera>().projection;
+
+	const auto& batch = batches.batches.at(entity);
+
+	SDL_GPUBufferBinding vertex_buffer_binding{
+		.buffer = storage.instance_buffer,
+	};
+	SDL_GPUBufferBinding index_buffer_binding{
+		.buffer = storage.index_buffer,
+	};
+
+	SDL_GPUTextureSamplerBinding texture_sampler_binding{
+		.texture = &batch.texture->get_gpu_texture(),
+		.sampler = pipeline.sampler,
+	};
+
+	SDL_BindGPUGraphicsPipeline(render_commands.render_pass, pipeline.pipeline);
+	SDL_BindGPUVertexBuffers(render_commands.render_pass, 0, &vertex_buffer_binding, 1);
+	SDL_BindGPUIndexBuffer(render_commands.render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+	SDL_BindGPUFragmentSamplers(render_commands.render_pass, 0, &texture_sampler_binding, 1);
+
+	SDL_PushGPUVertexUniformData(render_commands.cmd_buffer, 0, &view_proj, sizeof(glm::mat4));
+
+	SDL_DrawGPUIndexedPrimitives(render_commands.render_pass, 6, batch.size, 0, 0, batch.first_instance);
+}
+
 SpriteModule::SpriteModule(flecs::world& world) {
 	world.module<SpriteModule>();
 
 	world.import<AppModule>();
 	world.import<RenderModule>();
-	world.import<MeshModule>();
 	world.import<TransformModule>();
 
 	world.component<SpritePipeline>().add(flecs::Singleton);
@@ -46,17 +84,10 @@ SpriteModule::SpriteModule(flecs::world& world) {
 		.member<float>("a");
 
 	world.component<Sprite>()
-		.member<glm::vec2>("texture_size")
 		.member<glm::vec2>("origin")
 		.member<std::optional<glm::vec2>>("custom_size")
 		.member<SDL_FColor>("color")
 		.member<std::string>("path");
-
-	world.observer<Sprite>()
-		.event(flecs::OnSet)
-		.each([](flecs::entity e, Sprite& s) {
-			e.add<Dirty>();
-		});
 
 	world.system<Application, RenderDevice, SpritePipeline>("create sprite pipeline")
 		.kind(Phases::OnStart)
@@ -132,35 +163,75 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				}
 			};
 
+			SDL_GPUTextureCreateInfo texture_create_info{
+				.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+				.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+				.width = 1,
+				.height = 1,
+				.layer_count_or_depth = 1,
+				.num_levels = 1,
+			};
+
+			auto texture = SDL_CreateGPUTexture(device.gpu, &texture_create_info);
+
+			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+				.size = 4,
+			};
+
+			auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
+			auto tex_transfer_mem = SDL_MapGPUTransferBuffer(device.gpu, tex_transfer_buf, false);
+
+			uint32_t white_pixel = 0xffffffff;
+			std::memcpy(tex_transfer_mem, &white_pixel, 4);
+
+			SDL_UnmapGPUTransferBuffer(device.gpu, tex_transfer_buf);
+
+			auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(device.gpu);
+			auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
+
+			SDL_GPUTextureTransferInfo texture_transfer_info{
+				.transfer_buffer = tex_transfer_buf,
+			};
+			SDL_GPUTextureRegion texture_region{
+				.texture = texture,
+				.w = 1,
+				.h = 1,
+				.d = 1,
+			};
+
+			SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
+
+			SDL_EndGPUCopyPass(copy_pass);
+
+			assert(SDL_SubmitGPUCommandBuffer(copy_cmd_buf) && SDL_GetError());
+
+			SDL_ReleaseGPUTransferBuffer(device.gpu, tex_transfer_buf);
+
 			SDL_GPUSamplerCreateInfo sampler_create_info{};
 
 			pipeline.sampler = SDL_CreateGPUSampler(device.gpu, &sampler_create_info);
 			pipeline.pipeline = SDL_CreateGPUGraphicsPipeline(device.gpu, &pipeline_create_info);
+			pipeline.white_texture = std::make_shared<Texture>(device.gpu, texture, glm::vec2(1.f, 1.f));
 
 			SDL_ReleaseGPUShader(device.gpu, vert_shader);
 			SDL_ReleaseGPUShader(device.gpu, frag_shader);
 		});
 
-	world.system<RenderDevice, SpriteBatches>()
+	world.system<RenderDevice, CopyCommands, SpriteStorage>()
 		.kind(Phases::OnStart)
-		.each([](RenderDevice& device, SpriteBatches& batches) {
+		.each([](RenderDevice& device, CopyCommands& commands, SpriteStorage& storage) {
+			std::array<uint16_t, 6> indecies{
+				0, 1, 2,
+				2, 1, 3
+			};
+
 			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
 				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 				.size = max_sprites_per_batch * sizeof(SpriteInstance),
 			};
 
-			batches.transfer_buffer = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
-		});
-
-	world.system<RenderDevice, CopyCommands, SpriteStorage>()
-		.kind(Phases::OnStart)
-		.each([](RenderDevice& device, CopyCommands& commands, SpriteStorage& storage) {
-			constexpr auto white = glm::vec4{ 1, 1, 1, 1 };
-
-			std::array<uint16_t, 6> indecies{
-				0, 1, 2,
-				2, 3, 0
-			};
+			storage.transfer_buffer = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
 
 			const auto instances_byte_szie = 100'000 * sizeof(SpriteInstance);
 			const auto indecies_byte_szie = indecies.size() * sizeof(indecies[0]);
@@ -177,12 +248,13 @@ SpriteModule::SpriteModule(flecs::world& world) {
 			storage.instance_buffer = SDL_CreateGPUBuffer(device.gpu, &instance_buffer_create_info);
 			storage.index_buffer = SDL_CreateGPUBuffer(device.gpu, &index_buffer_create_info);
 
-			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+			// TODO: use storage transfer buf?
+			SDL_GPUTransferBufferCreateInfo indecies_transfer_buffer_create_info{
 				.usage = SDL_GPUTransferBufferUsage::SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 				.size = static_cast<uint32_t>(indecies_byte_szie)
 			};
 
-			auto transfer_buf = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
+			auto transfer_buf = SDL_CreateGPUTransferBuffer(device.gpu, &indecies_transfer_buffer_create_info);
 
 			auto transfer_mem = SDL_MapGPUTransferBuffer(device.gpu ,transfer_buf, false);
 
@@ -217,9 +289,13 @@ SpriteModule::SpriteModule(flecs::world& world) {
 
 			auto& batches = it.world().get_mut<SpriteBatches>();
 
-			auto instances = static_cast<SpriteInstance*>(SDL_MapGPUTransferBuffer(device.gpu, batches.transfer_buffer, false));
+			batches.batches.clear();
+
+			auto instances = static_cast<SpriteInstance*>(SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false));
 
 			uint32_t current_instance = 0;
+
+			flecs::entity_t current_batch_entity;
 
 			while (it.next()) {
 				auto sprites = it.field<Sprite>(0);
@@ -229,19 +305,25 @@ SpriteModule::SpriteModule(flecs::world& world) {
 					auto& sprite = sprites[i];
 					auto& transform = transforms[i];
 
-					if (batches.batches.empty() || batches.batches.back().texture != sprite.texture || batches.batches.back().size >= max_sprites_per_batch) {
-						batches.batches.emplace_back(SpriteBatch{
+					if (!sprite.texture) {
+						sprite.texture = pipeline.white_texture;
+					}
+
+					if (batches.batches.empty() || batches.batches.at(current_batch_entity).texture != sprite.texture || batches.batches.at(current_batch_entity).size >= max_sprites_per_batch) {
+						current_batch_entity = it.entity(i);
+
+						batches.batches.emplace(current_batch_entity, SpriteBatch{
 							.size = 0,
 							.first_instance = current_instance,
 							.texture = sprite.texture,
 						});
 					}
 
-					auto& current_batch = batches.batches.back();
+					auto& current_batch = batches.batches.at(current_batch_entity);
 
 					instances[current_instance].translation = glm::vec4(transform.translation, 0.f);
 					instances[current_instance].rotation    = glm::vec4(transform.rotation, 0.f);
-					instances[current_instance].scale       = glm::vec4(transform.scale * glm::vec3(sprite.texture->get_size(), 0.f), 0.f);
+					instances[current_instance].scale       = glm::vec4(transform.scale * glm::vec3(sprite.custom_size.value_or(sprite.texture->get_size()), 0.f), 0.f);
 					instances[current_instance].color       = sprite.color;
 					instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
 					instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
@@ -251,15 +333,15 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				}
 			}
 
-			SDL_UnmapGPUTransferBuffer(device.gpu, batches.transfer_buffer);
+			SDL_UnmapGPUTransferBuffer(device.gpu, storage.transfer_buffer);
 
 			auto copy_pass = SDL_BeginGPUCopyPass(copy_commands.buffer);
 
-			for (const auto& batch : batches.batches) {
+			for (const auto& [_, batch] : batches.batches) {
 				const auto offset = static_cast<Uint32>(batch.first_instance * sizeof(SpriteInstance));
 
 				const auto buffer_location = SDL_GPUTransferBufferLocation{
-					.transfer_buffer = batches.transfer_buffer,
+					.transfer_buffer = storage.transfer_buffer,
 					.offset = offset,
 				};
 
@@ -275,64 +357,19 @@ SpriteModule::SpriteModule(flecs::world& world) {
 			SDL_EndGPUCopyPass(copy_pass);
 		});
 
-	world.system<SpriteBatches, RenderCommands, SpritePipeline, SpriteStorage>()
-		.kind(Phases::Render)
-		.each([world](SpriteBatches& batches, RenderCommands& render_commands, SpritePipeline& pipeline, SpriteStorage& storage) {
-			const auto camera = world.entity(CameraModule::EcsCamera);
-			const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
-			const auto projection = camera.get<Camera>().projection;
-			const auto view_proj = view * projection;
-
-			SDL_GPUBufferBinding vertex_buffer_binding{
-				.buffer = storage.instance_buffer,
-			};
-			SDL_GPUBufferBinding index_buffer_binding{
-				.buffer = storage.index_buffer,
-			};
-
-			SDL_BindGPUGraphicsPipeline(render_commands.render_pass, pipeline.pipeline);
-			SDL_BindGPUVertexBuffers(render_commands.render_pass, 0, &vertex_buffer_binding, 1);
-			SDL_BindGPUIndexBuffer(render_commands.render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-			//SDL_BindGPUVertexStorageBuffers(render_commands.render_pass, 0, &batches.data_buffer, 1);
-
-			SDL_PushGPUVertexUniformData(render_commands.cmd_buffer, 0, &view_proj, sizeof(glm::mat4));
-
-			auto draw_calls_count = 0;
-
-			for (const auto& batch : batches.batches) {
-				SDL_GPUTextureSamplerBinding texture_sampler_binding{
-					.texture = &batch.texture->get_gpu_texture(),
-					.sampler = pipeline.sampler,
-				};
-
-				SDL_BindGPUFragmentSamplers(render_commands.render_pass, 0, &texture_sampler_binding, 1);
-				SDL_DrawGPUIndexedPrimitives(render_commands.render_pass, 6, batch.size, 0, 0, batch.first_instance);
-
-				++draw_calls_count;
-			}
-
-			batches.batches.clear();
-
-			spdlog::info("draw calls: {}", draw_calls_count);
+	world.system<const Sprite, const GlobalTransform, const SpritePipeline, RenderItems>()
+		.kind(Phases::PostUpdate)
+		.each([](flecs::entity e, const Sprite& sprite, const GlobalTransform& transform, const SpritePipeline& pipeline, RenderItems& items) {
+			items.emplace_back(e, transform.translation.z, &draw_sprite);
 		});
 
 	world.system<AssetStorage, RenderDevice>()
 		.kind(Phases::OnStart)
 		.each([](flecs::iter& it, size_t, AssetStorage& assets, RenderDevice& device) {
 			it.world().entity("sprite")
-				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/main_menu.jpg") });
+				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/COUPON.png") });
 			it.world().entity("sprite2")
-				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/red.png") })
-				.set<Transform>({ .translation = {150.f, 150.f, 0.f } });
-			it.world().entity("sprite3")
-				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/main_menu.jpg") })
-				.set<Transform>({ .translation = {200.f, 200.f, 0.f } });
-			it.world().entity("sprite4")
-				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/main_menu.jpg") })
-				.set<Transform>({ .translation = {300.f, 200.f, 0.f } });
-			it.world().entity("sprite5")
-				.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/red.png") })
-				.set<Transform>({ .translation = {450.f, 150.f, 0.f } });
+				.set<Sprite>({ .custom_size = glm::vec2{ 100.f, 100.f }, .color = { 1.f, 0.f, 0.f, 1.f } });
 		});
 
 	world.add<SpritePipeline>();
