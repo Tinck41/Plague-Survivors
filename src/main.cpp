@@ -41,10 +41,15 @@ int main() {
 	world.system<ps::Application, ps::AssetStorage, ps::RenderDevice>()
 		.kind(ps::Phases::OnStart)
 		.each([world](ps::Application& app, ps::AssetStorage& storage, ps::RenderDevice& device) {
-			world.entity().set<ps::Text>({ .string = "hello SDL3_ttf!", .font = storage.load_font("assets/FreeSans.ttf", 46) });
+			world.entity("sprite")
+				.set<ps::Sprite>({ .texture = storage.load_texture(*device.gpu, "assets/COUPON.png") });
+			world.entity()
+				.set<ps::Text>({ .string = "hello SDL3_ttf!", .font = storage.load_font("assets/FreeSans.ttf", 46) });
+			world.entity("sprite2")
+				.set<ps::Sprite>({ .custom_size = glm::vec2{ 100.f, 100.f }, .color = { 1.f, 0.f, 0.f, 1.f } });
 		});
 
-	auto& app = world.get<ps::Application>();
+	const auto& app = world.get<ps::Application>();
 
 	while(app.is_running) {
 		//spdlog::info("----------------------tick---------------------");

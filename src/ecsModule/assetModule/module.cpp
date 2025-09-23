@@ -83,7 +83,7 @@ std::shared_ptr<Font> AssetStorage::load_font(const std::string& path, float siz
 	if (!fonts.contains(path)) {
 		TTF_Font* resource = TTF_OpenFont(path.c_str(), size);
 
-		TTF_SetFontSDF(resource, true);
+		TTF_SetFontSDF(resource, false);
 		TTF_SetFontWrapAlignment(resource, TTF_HORIZONTAL_ALIGN_CENTER);
 
 		fonts[path] = std::make_shared<Font>(resource);

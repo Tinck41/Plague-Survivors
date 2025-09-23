@@ -34,6 +34,8 @@ namespace ps {
 		TTF_TextEngine* engine;
 	};
 
+	using TextBatches = std::unordered_map<flecs::entity_t, TTF_GPUAtlasDrawSequence*>;
+
 	struct TextModule {
 		TextModule(flecs::world& world);
 	};

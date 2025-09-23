@@ -10,12 +10,65 @@
 #include "ecsModule/meshModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ext/matrix_transform.hpp"
+#include "spdlog/spdlog.h"
 #include "utils/sdl.h"
 #include "font.h"
 
 using namespace ps;
 
-static std::map<flecs::entity_t, std::shared_ptr<Texture>> font_textures;
+void draw_text(flecs::entity_t entity, const flecs::world& world) {
+	const auto& batches = world.get<TextBatches>();
+
+	if (!batches.contains(entity)) {
+		return;
+	}
+
+	const auto& pipeline = world.get<TextPipeline>();
+	const auto& storage = world.get<TextStorage>();
+	const auto& commands = world.get<RenderCommands>();
+
+	auto batch = batches.at(entity);
+
+	SDL_GPUBufferBinding vertex_bindings{
+		.buffer = storage.vertex_buffer, .offset = 0
+	};
+	SDL_GPUBufferBinding index_bindings{
+		.buffer = storage.index_buffer, .offset = 0
+	};
+
+	const auto camera = world.entity(CameraModule::EcsCamera);
+	const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
+	const auto view_proj = view * camera.get<Camera>().projection;
+
+	std::array<glm::mat4, 2> matrices{
+		view_proj,
+		glm::scale(world.entity(entity).get<GlobalTransform>().matrix, glm::vec3(1.f, -1.f, 1.f)) // TODO
+	};
+
+	SDL_BindGPUGraphicsPipeline(commands.render_pass, pipeline.pipeline);
+	SDL_BindGPUVertexBuffers(commands.render_pass, 0, &vertex_bindings, 1);
+	SDL_BindGPUIndexBuffer(commands.render_pass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+	SDL_PushGPUVertexUniformData(commands.cmd_buffer, 0, &matrices, sizeof(glm::mat4) * 2);
+
+	int index_offset = 0;
+	int vertex_offset = 0;
+
+	while (batch != nullptr) {
+		SDL_GPUTextureSamplerBinding bindings{
+			.texture = batch->atlas_texture,
+			.sampler = pipeline.sampler,
+		};
+
+		SDL_BindGPUFragmentSamplers(commands.render_pass, 0, &bindings, 1);
+
+		SDL_DrawGPUIndexedPrimitives(commands.render_pass, batch->num_indices, 1, index_offset, vertex_offset, 0);
+
+		index_offset += batch->num_indices;
+		vertex_offset += batch->num_vertices;
+
+		batch = batch->next;
+	}
+}
 
 TextModule::TextModule(flecs::world& world) {
 	world.module<TextModule>();
@@ -26,13 +79,14 @@ TextModule::TextModule(flecs::world& world) {
 
 	world.component<TextStorage>().add(flecs::Singleton);
 	world.component<TextPipeline>().add(flecs::Singleton);
+	world.component<TextBatches>().add(flecs::Singleton);
 	world.component<Text>()
 		.add(flecs::With, world.component<Transform>());
 
 	world.system<Application, RenderDevice, TextPipeline>()
 		.kind(Phases::OnStart)
 		.each([](Application& app, RenderDevice& device, TextPipeline& pipeline) {
-			constexpr bool use_sdf = true;
+			constexpr bool use_sdf = false;
 
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/text.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, use_sdf ? "assets/shaders/out/text_sdf.frag.msl" : "assets/shaders/out/text.frag.msl", 0, 1);
@@ -150,6 +204,25 @@ TextModule::TextModule(flecs::world& world) {
 			storage.text_data[text.string] = TTF_CreateText(pipeline.engine, *text.font, text.string.c_str(), text.string.size());
 		});
 
+	world.system<Text>()
+		.kind(Phases::PostUpdate)
+		.run([](flecs::iter& it) {
+			auto& storage = it.world().get<TextStorage>();
+			auto& batches = it.world().get_mut<TextBatches>();
+
+			batches.clear();
+
+			while(it.next()) {
+				auto texts = it.field<Text>(0);
+
+				for (int i : it) {
+					const auto& text = texts[i];
+
+					batches[it.entity(i)] = TTF_GetGPUTextDrawData(storage.text_data.at(text.string));
+				}
+			}
+		});
+
 	world.system<const Text, TextStorage, TextPipeline, RenderDevice, CopyCommands>()
 		.kind(Phases::PostUpdate)
 		.each([world](flecs::entity e, const Text& text, TextStorage& storage, TextPipeline& pipeline, RenderDevice& device, CopyCommands& commands) {
@@ -213,56 +286,15 @@ TextModule::TextModule(flecs::world& world) {
 			SDL_EndGPUCopyPass(copy_pass);
 		});
 
-	world.system<const Text, const GlobalTransform, const TextStorage, TextPipeline, RenderDevice, RenderCommands>()
-		.kind(Phases::Render)
-		.each([world](flecs::entity e, const Text& text, const GlobalTransform& transform, const TextStorage& storage, TextPipeline& pipeline, const RenderDevice& device, const RenderCommands& commands) {
-			auto data = TTF_GetGPUTextDrawData(storage.text_data.at(text.string));
-
-			SDL_GPUBufferBinding vertex_bindings{
-				.buffer = storage.vertex_buffer, .offset = 0
-			};
-			SDL_GPUBufferBinding index_bindings{
-				.buffer = storage.index_buffer, .offset = 0
-			};
-
-			const auto camera = world.entity(CameraModule::EcsCamera);
-			const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
-			const auto view_proj = view * camera.get<Camera>().projection;
-
-			int tw, th;
-			TTF_GetTextSize(storage.text_data.at(text.string), &tw, &th);
-
-			std::array<glm::mat4, 2> matrices{
-				view_proj,
-				glm::scale(transform.matrix, glm::vec3(1.f, -1.f, 1.f))
-			};
-
-
-			SDL_BindGPUGraphicsPipeline(commands.render_pass, pipeline.pipeline);
-			SDL_BindGPUVertexBuffers(commands.render_pass, 0, &vertex_bindings, 1);
-			SDL_BindGPUIndexBuffer(commands.render_pass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-			SDL_PushGPUVertexUniformData(commands.cmd_buffer, 0, &matrices, sizeof(glm::mat4) * 2);
-
-			int index_offset = 0;
-			int vertex_offset = 0;
-
-			for (TTF_GPUAtlasDrawSequence *seq = data; seq != nullptr; seq = seq->next) {
-				SDL_GPUTextureSamplerBinding bindings{
-					.texture = seq->atlas_texture,
-					.sampler = pipeline.sampler,
-				};
-
-				SDL_BindGPUFragmentSamplers(commands.render_pass, 0, &bindings, 1);
-
-				SDL_DrawGPUIndexedPrimitives(commands.render_pass, seq->num_indices, 1, index_offset, vertex_offset, 0);
-
-				index_offset += seq->num_indices;
-				vertex_offset += seq->num_vertices;
-			}
+	world.system<Text, GlobalTransform, RenderItems>()
+		.kind(Phases::PostUpdate)
+		.each([](flecs::entity entity, Text& text, const GlobalTransform& transform, RenderItems& items) {
+			items.emplace_back(entity, transform.translation.z, &draw_text);
 		});
 
 	TTF_Init();
 
 	world.add<TextStorage>();
 	world.add<TextPipeline>();
+	world.add<TextBatches>();
 }
