@@ -14,7 +14,6 @@ set(BOX2D_BUILD_TESTBED FALSE)
 
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
-#add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/raylib)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/flecs)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/box2d)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/spdlog)
@@ -26,6 +25,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_ttf)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/box2d/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/glm)
+include_directories(${CMAKE_SOURCE_DIR}/vendor/matchit)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_executable(${PROJECT_NAME} 
@@ -71,7 +71,6 @@ add_executable(${PROJECT_NAME}
 	src/utils/sdl.cpp
 )
 
-#target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)
 target_link_libraries(${PROJECT_NAME} PRIVATE box2d)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)

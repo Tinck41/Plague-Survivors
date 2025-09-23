@@ -10,6 +10,9 @@
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
+#include "patterns.hpp"
+#include "matchit.h"
+#include <ranges>
 
 using namespace ps;
 
@@ -87,8 +90,7 @@ SpriteModule::SpriteModule(flecs::world& world) {
 	world.component<Sprite>()
 		.member<glm::vec2>("origin")
 		.member<std::optional<glm::vec2>>("custom_size")
-		.member<SDL_FColor>("color")
-		.member<std::string>("path");
+		.member<SDL_FColor>("color");
 
 	world.system<Application, RenderDevice, SpritePipeline>("create sprite pipeline")
 		.kind(Phases::OnStart)
@@ -281,7 +283,15 @@ SpriteModule::SpriteModule(flecs::world& world) {
 	world.system<Sprite, GlobalTransform, SpritesRenderData>()
 		.kind(Phases::PostUpdate)
 		.each([](flecs::entity entity, Sprite& sprite, GlobalTransform& transform, SpritesRenderData& sprites_render_data) {
-			sprites_render_data.emplace_back(entity, sprite.texture, sprite.custom_size, transform, sprite.color);
+			sprites_render_data.emplace_back(
+				entity,
+				sprite.texture,
+				transform,
+				sprite.color,
+				SpriteSingle{
+					.custom_size = sprite.custom_size
+				}
+			);
 		});
 
 	world.system<SpritesRenderData>()
@@ -319,12 +329,24 @@ SpriteModule::SpriteModule(flecs::world& world) {
 
 				auto& current_batch = batches.at(current_batch_entity);
 
-				instances[current_instance].translation = glm::vec4(render_data.transform.translation, 0.f);
-				instances[current_instance].rotation    = glm::vec4(render_data.transform.rotation, 0.f);
-				instances[current_instance].scale       = glm::vec4(render_data.transform.scale * glm::vec3(render_data.custom_size.value_or(render_data.texture->get_size()), 0.f), 0.f);
-				instances[current_instance].color       = render_data.color;
-				instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
-				instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
+
+				using namespace mpark::patterns;
+
+				match(render_data.kind)(
+					pattern(as<SpriteSingle>(arg)) = [&](const SpriteSingle& single) {
+						instances[current_instance].translation = glm::vec4(render_data.transform.translation, 0.f);
+						instances[current_instance].rotation    = glm::vec4(render_data.transform.rotation, 0.f);
+						instances[current_instance].scale       = glm::vec4(render_data.transform.scale * glm::vec3(single.custom_size.value_or(render_data.texture->get_size()), 0.f), 0.f);
+						instances[current_instance].color       = render_data.color;
+						instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
+						instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
+					},
+					pattern(as<SpriteSequence>(arg)) = [](const SpriteSequence& s) {
+						for (size_t i : std::ranges::views::iota(s.range.first, s.range.second)) {
+
+						}
+					}
+				);
 
 				++current_batch.size;
 				++current_instance;
@@ -363,15 +385,6 @@ SpriteModule::SpriteModule(flecs::world& world) {
 
 			sprites_render_data.clear();
 		});
-
-	//world.system<AssetStorage, RenderDevice>()
-	//	.kind(Phases::OnStart)
-	//	.each([](flecs::iter& it, size_t, AssetStorage& assets, RenderDevice& device) {
-	//		it.world().entity("sprite")
-	//			.set<Sprite>({ .texture = assets.load_texture(*device.gpu, "assets/COUPON.png") });
-	//		it.world().entity("sprite2")
-	//			.set<Sprite>({ .custom_size = glm::vec2{ 100.f, 100.f }, .color = { 1.f, 0.f, 0.f, 1.f } });
-	//	});
 
 	world.add<SpritePipeline>();
 	world.add<SpriteBatches>();

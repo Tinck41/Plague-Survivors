@@ -11,6 +11,7 @@
 #include <optional>
 #include <memory>
 #include <map>
+#include <variant>
 #include <vector>
 
 namespace ps {
@@ -21,15 +22,32 @@ namespace ps {
 		std::shared_ptr<Texture> texture;
 	};
 
+	struct SpriteSingle {
+		std::optional<glm::vec2> custom_size;
+	};
+
+	struct SpriteSequence {
+		std::pair<size_t, size_t> range;
+	};
+
+	using SpriteKind = std::variant<SpriteSingle, SpriteSequence>;
+
 	struct SpriteRenderData {
 		flecs::entity_t entity;
 		std::shared_ptr<Texture> texture;
-		std::optional<glm::vec2> custom_size;
 		Transform transform;
 		glm::vec4 color;
+		SpriteKind kind;
+	};
+
+	struct SpriteRangeRenderData {
+		glm::vec3 position;
+		glm::vec4 colour;
+		glm::vec2 uv;
 	};
 
 	using SpritesRenderData = std::vector<SpriteRenderData>;
+	using SpritesRangeRenderData = std::vector<SpriteRangeRenderData>;
 
 	struct SpriteInstance {
 		glm::vec4 translation;

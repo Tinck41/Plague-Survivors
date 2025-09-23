@@ -7,6 +7,7 @@
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/meshModule/module.h"
 #include "ecsModule/inputModule/module.h"
+#include "ecsModule/common.h"
 
 #include "flecs.h"
 #include "spdlog/spdlog.h"
@@ -36,6 +37,12 @@ int main() {
 	//world.script().filename("assets/scripts/mainMenu.flecs").run();
 	//world.script().filename("assets/scripts/gameScene.flecs").run();
 	world.script().filename("assets/scripts/sandbox.flecs").run();
+
+	world.system<ps::Application, ps::AssetStorage, ps::RenderDevice>()
+		.kind(ps::Phases::OnStart)
+		.each([world](ps::Application& app, ps::AssetStorage& storage, ps::RenderDevice& device) {
+			world.entity().set<ps::Text>({ .string = "hello SDL3_ttf!", .font = storage.load_font("assets/FreeSans.ttf", 46) });
+		});
 
 	auto& app = world.get<ps::Application>();
 

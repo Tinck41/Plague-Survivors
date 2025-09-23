@@ -193,14 +193,14 @@ InputModule::InputModule(flecs::world& world) {
 						.emit();
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).pressed = !input.keys.at(sdl_key_to_ps_key(event.key.scancode)).remain;
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).remain = true;
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).released = false;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = !input.keys[sdl_key_to_ps_key(event.key.scancode)].remain;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].remain = true;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].released = false;
 				}
 				else if (event.type == SDL_EVENT_KEY_UP) {
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).pressed = false;
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).remain = false;
-					input.keys.at(sdl_key_to_ps_key(event.key.scancode)).released = true;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = false;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].remain = false;
+					input.keys[sdl_key_to_ps_key(event.key.scancode)].released = true;
 				}
 			}
 		});
