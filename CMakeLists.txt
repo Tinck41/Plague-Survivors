@@ -30,6 +30,8 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_executable(${PROJECT_NAME} 
 	src/main.cpp
+	src/core/application.h
+	src/core/application.cpp
 	src/texture.h
 	src/texture.cpp
 	src/font.h
@@ -51,8 +53,9 @@ add_executable(${PROJECT_NAME}
 	#src/ecsModule/playerModule/module.cpp
 	src/ecsModule/transformModule/module.h
 	src/ecsModule/transformModule/module.cpp
-	src/ecsModule/appModule/module.h
-	src/ecsModule/appModule/module.cpp
+	src/ecsModule/windowModule/components.h
+	src/ecsModule/windowModule/module.h
+	src/ecsModule/windowModule/module.cpp
 	#src/ecsModule/sceneModule/module.h
 	#src/ecsModule/sceneModule/module.cpp
 	src/ecsModule/renderModule/module.h
@@ -61,14 +64,20 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/spriteModule/module.cpp
 	src/ecsModule/textModule/module.h
 	src/ecsModule/textModule/module.cpp
+	src/ecsModule/meshModule/primitives.h
+	src/ecsModule/meshModule/primitives.cpp
+	src/ecsModule/meshModule/components.h
 	src/ecsModule/meshModule/module.h
 	src/ecsModule/meshModule/module.cpp
+	src/ecsModule/default_modules.h
+	src/ecsModule/default_modules.cpp
 	#src/ecsModule/tweenModule/module.h
 	#src/ecsModule/tweenModule/module.cpp
 	src/ecsModule/utils.h
 	src/ecsModule/utils.cpp
 	src/utils/sdl.h
 	src/utils/sdl.cpp
+	src/utils/visit.h
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)

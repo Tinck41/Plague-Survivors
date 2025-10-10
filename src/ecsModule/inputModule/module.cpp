@@ -1,8 +1,12 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/windowModule/module.h"
+#include "ecsModule/windowModule/components.h"
 #include "ecsModule/cameraModule/module.h"
+#include "core/app_state.h"
+
+#include "SDL3/SDL.h"
 
 using namespace ps;
 
@@ -157,16 +161,16 @@ Key sdl_key_to_ps_key(int key) {
 InputModule::InputModule(flecs::world& world) {
 	world.module<InputModule>();
 
-	world.import<AppModule>();
+	world.import<WindowModule>();
 	world.import<CameraModule>();
 
 	world.component<Input>().add(flecs::Singleton);
 
 	world.set<Input>({});
 
-	world.system<Application, Input>()
+	world.system<Window, Input, AppState>()
 		.kind(Phases::HandleInput)
-		.each([world](Application& app, Input& input) {
+		.each([world](Window& window, Input& input, AppState& app_state) {
 			for (auto& [key, state] : input.keys) {
 				state.pressed = false;
 				state.released = false;
@@ -182,14 +186,19 @@ InputModule::InputModule(flecs::world& world) {
 
 			while (SDL_PollEvent(&event)) {
 				if (event.type == SDL_EVENT_QUIT) {
-					app.is_running = false;
+					app_state = AppState::Exit;
 				}
 				else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 					const auto camera = world.entity(CameraModule::EcsCamera);
 
-					world.event<WindowResized>()
-						.id<Camera>()
-						.entity(camera)
+					WindowResize event;
+
+					SDL_GetWindowSize(window.handle, &event.width, &event.height);
+
+					world.event<WindowResize>()
+						.id(flecs::Any)
+						.entity(flecs::Any)
+						.ctx(event)
 						.emit();
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {

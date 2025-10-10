@@ -1,6 +1,9 @@
 #include "module.h"
 
+#include "components.h"
 #include "ecsModule/common.h"
+#include "ecsModule/meshModule/primitives.h"
+#include "ecsModule/meshModule/components.h"
 #include "ecsModule/renderModule/module.h"
 
 using namespace ps;
@@ -10,7 +13,7 @@ MeshModule::MeshModule(flecs::world& world) {
 
 	world.import<RenderModule>();
 
-	//world.component<Mesh>();
+	world.component<Mesh>();
 	world.component<Material>();
 	world.component<QuadMesh>().add(flecs::Singleton);
 

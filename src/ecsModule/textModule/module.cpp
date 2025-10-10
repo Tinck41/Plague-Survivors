@@ -1,6 +1,7 @@
 #include "module.h"
 
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/windowModule/module.h"
+#include "ecsModule/windowModule/components.h"
 #include "ecsModule/assetModule/module.h"
 #include "ecsModule/common.h"
 #include "SDL3_ttf/SDL_ttf.h"
@@ -73,6 +74,7 @@ void draw_text(flecs::entity_t entity, const flecs::world& world) {
 TextModule::TextModule(flecs::world& world) {
 	world.module<TextModule>();
 
+	world.import<WindowModule>();
 	world.import<RenderModule>();
 	world.import<SpriteModule>();
 	world.import<TransformModule>();
@@ -83,16 +85,16 @@ TextModule::TextModule(flecs::world& world) {
 	world.component<Text>()
 		.add(flecs::With, world.component<Transform>());
 
-	world.system<Application, RenderDevice, TextPipeline>()
+	world.system<Window, RenderDevice, TextPipeline>()
 		.kind(Phases::OnStart)
-		.each([](Application& app, RenderDevice& device, TextPipeline& pipeline) {
-			constexpr bool use_sdf = false;
+		.each([](Window& window, RenderDevice& device, TextPipeline& pipeline) {
+			constexpr bool use_sdf = true;
 
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/text.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, use_sdf ? "assets/shaders/out/text_sdf.frag.msl" : "assets/shaders/out/text.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description = {
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, app.window),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -228,6 +230,7 @@ TextModule::TextModule(flecs::world& world) {
 		.each([world](flecs::entity e, const Text& text, TextStorage& storage, TextPipeline& pipeline, RenderDevice& device, CopyCommands& commands) {
 			auto data = TTF_GetGPUTextDrawData(storage.text_data.at(text.string));
 
+			// TODO: do not alloc every frame
 			auto indices = static_cast<int*>(SDL_calloc(10'000, sizeof(int)));
 
 			auto transfer_data = static_cast<Vertex*>(SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false));
@@ -254,6 +257,7 @@ TextModule::TextModule(flecs::world& world) {
 			}
 
 			SDL_memcpy(transfer_data + 10'000, indices, sizeof(int) * index_count);
+			SDL_free(indices);
 
 			SDL_UnmapGPUTransferBuffer(device.gpu, storage.transfer_buffer);
 

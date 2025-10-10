@@ -5,7 +5,8 @@
 #include "ecsModule/assetModule/module.h"
 #include "ecsModule/common.h"
 #include "ecsModule/transformModule/module.h"
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/windowModule/components.h"
+#include "ecsModule/windowModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ext/matrix_clip_space.hpp"
 #include "ext/matrix_transform.hpp"
@@ -18,7 +19,7 @@ using namespace ps;
 RenderModule::RenderModule(flecs::world& world) {
 	world.module<RenderModule>();
 
-	world.import<AppModule>();
+	world.import<WindowModule>();
 	world.import<TransformModule>();
 	world.import<CameraModule>();
 
@@ -34,20 +35,20 @@ RenderModule::RenderModule(flecs::world& world) {
 		.member<unsigned char>("b")
 		.member<unsigned char>("a");
 
-	world.system<Application, RenderDevice>()
+	world.system<Window, RenderDevice>()
 		.kind(Phases::OnStart)
-		.each([](Application& app, RenderDevice& render_device) {
+		.each([](Window& window, RenderDevice& render_device) {
 			auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
 
 			assert(gpu && SDL_GetError());
-			assert(SDL_ClaimWindowForGPUDevice(gpu, app.window) && SDL_GetError());
+			assert(SDL_ClaimWindowForGPUDevice(gpu, window.handle) && SDL_GetError());
 
 			render_device.gpu = gpu;
 		});
 
-	world.system<Application, RenderDevice, WhiteTexture>()
+	world.system<RenderDevice, WhiteTexture>()
 		.kind(Phases::OnStart)
-		.each([](Application& app, RenderDevice& render_device, WhiteTexture& white_texture) {
+		.each([](RenderDevice& render_device, WhiteTexture& white_texture) {
 			auto texture_create_info = SDL_GPUTextureCreateInfo{
 				.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
 				.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
@@ -107,12 +108,12 @@ RenderModule::RenderModule(flecs::world& world) {
 			SDL_SubmitGPUCommandBuffer(copy_commands.buffer);
 		});
 
-	world.system<Application, RenderDevice, RenderCommands>()
+	world.system<Window, RenderDevice, RenderCommands>()
 		.kind(Phases::Clear)
-		.each([](Application& app, RenderDevice& device, RenderCommands& render_commands) {
+		.each([](Window& window, RenderDevice& device, RenderCommands& render_commands) {
 			render_commands.cmd_buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
 
-			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, app.window, &render_commands.swapchain_texture, nullptr, nullptr) && SDL_GetError());
+			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &render_commands.swapchain_texture, nullptr, nullptr) && SDL_GetError());
 
 			auto color_target = SDL_GPUColorTargetInfo{
 				.texture = render_commands.swapchain_texture,

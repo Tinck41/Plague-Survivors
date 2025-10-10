@@ -1,7 +1,8 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/windowModule/module.h"
+#include "ecsModule/windowModule/components.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/assetModule/module.h"
@@ -10,8 +11,8 @@
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
-#include "patterns.hpp"
-#include "matchit.h"
+#include "utils/visit.h"
+
 #include <ranges>
 
 using namespace ps;
@@ -60,7 +61,7 @@ void draw_sprite(flecs::entity_t entity, const flecs::world& world) {
 SpriteModule::SpriteModule(flecs::world& world) {
 	world.module<SpriteModule>();
 
-	world.import<AppModule>();
+	world.import<WindowModule>();
 	world.import<RenderModule>();
 	world.import<TransformModule>();
 
@@ -92,14 +93,14 @@ SpriteModule::SpriteModule(flecs::world& world) {
 		.member<std::optional<glm::vec2>>("custom_size")
 		.member<SDL_FColor>("color");
 
-	world.system<Application, RenderDevice, SpritePipeline>("create sprite pipeline")
+	world.system<Window, RenderDevice, SpritePipeline>("create sprite pipeline")
 		.kind(Phases::OnStart)
-		.each([](Application& app, RenderDevice& device, SpritePipeline& pipeline) {
+		.each([](Window& window, RenderDevice& device, SpritePipeline& pipeline) {
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/sprite_batch.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, "assets/shaders/out/sprite_batch.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description{
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, app.window),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -330,10 +331,8 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				auto& current_batch = batches.at(current_batch_entity);
 
 
-				using namespace mpark::patterns;
-
-				match(render_data.kind)(
-					pattern(as<SpriteSingle>(arg)) = [&](const SpriteSingle& single) {
+				visit(render_data.kind, visitors{
+					[&](SpriteSingle& single) {
 						instances[current_instance].translation = glm::vec4(render_data.transform.translation, 0.f);
 						instances[current_instance].rotation    = glm::vec4(render_data.transform.rotation, 0.f);
 						instances[current_instance].scale       = glm::vec4(render_data.transform.scale * glm::vec3(single.custom_size.value_or(render_data.texture->get_size()), 0.f), 0.f);
@@ -341,12 +340,10 @@ SpriteModule::SpriteModule(flecs::world& world) {
 						instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
 						instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
 					},
-					pattern(as<SpriteSequence>(arg)) = [](const SpriteSequence& s) {
-						for (size_t i : std::ranges::views::iota(s.range.first, s.range.second)) {
-
-						}
+					[](SpriteSequence& sequence) {
+						// TODO?
 					}
-				);
+				});
 
 				++current_batch.size;
 				++current_instance;

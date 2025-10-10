@@ -5,11 +5,6 @@
 
 #include <fstream>
 
-void ps::print_sdl_error() {
-	spdlog::error("{}", SDL_GetError());
-}
-
-
 SDL_GPUShader* ps::load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf, uint32_t num_samplers, uint32_t num_storage_buf) {
 	std::ifstream file;
 	SDL_GPUShaderStage stage;

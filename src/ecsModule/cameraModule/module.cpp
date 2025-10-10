@@ -5,7 +5,8 @@
 //#include "ecsModule/renderModule/module.h"
 //#include "ecsModule/timeModule/module.h"
 #include "ecsModule/transformModule/module.h"
-#include "ecsModule/appModule/module.h"
+#include "ecsModule/windowModule/module.h"
+#include "ecsModule/windowModule/components.h"
 #include "ext/matrix_clip_space.hpp"
 #include "spdlog/spdlog.h"
 
@@ -16,7 +17,7 @@ CameraModule::CameraModule(flecs::world& world) {
 
 	//world.import<PhysicsModule>();
 	world.import<TransformModule>();
-	world.import<AppModule>();
+	world.import<WindowModule>();
 	//world.import<TimeModule>();
 	//world.import<RenderModule>();
 
@@ -28,26 +29,23 @@ CameraModule::CameraModule(flecs::world& world) {
 	world.component<Camera>()
 		.member<glm::vec2>("offset");
 
-	world.system<Application, Camera>()
+	world.system<Window, Camera>()
 		.kind(Phases::OnStart)
-		.each([](Application& app, Camera& c) {
+		.each([](Window& window, Camera& c) {
 			int width;
 			int height;
 
-			SDL_GetWindowSize(app.window, &width, &height);
+			SDL_GetWindowSize(window.handle, &width, &height);
 
 			c.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
 		});
 
 	world.observer<Camera>()
-		.event<WindowResized>()
-		.each([world](Camera& camera) {
-			int width;
-			int height;
+		.event<WindowResize>()
+		.each([](flecs::iter& it, size_t i, Camera& camera) {
+			const auto eventData = it.param<WindowResize>();
 
-			SDL_GetWindowSize(world.get<Application>().window, &width, &height);
-
-			camera.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
+			camera.projection = glm::ortho(0.f, static_cast<float>(eventData->width), static_cast<float>(eventData->height), 0.f, -1.f, 1.f);
 		});
 
 	//world.system<Application, Camera>()

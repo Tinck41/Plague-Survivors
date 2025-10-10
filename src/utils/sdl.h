@@ -5,7 +5,10 @@
 #include <string>
 
 namespace ps {
-	void print_sdl_error();
+	struct GpuBuffer {
+		SDL_GPUBuffer* buffer;
+		size_t size;
+	};
 
 	SDL_GPUShader* load_shader(SDL_GPUDevice& gpu, std::string_view path, uint32_t num_uniform_buf = 0, uint32_t num_samplers = 0, uint32_t num_storage_buf = 0);
 }

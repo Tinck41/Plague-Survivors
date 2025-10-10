@@ -10,6 +10,11 @@ namespace ps {
 		glm::mat4 projection;
 	};
 
+	struct WindowResize {
+		int width;
+		int height;
+	};
+
 	struct CameraModule {
 		CameraModule(flecs::world& world);
 
