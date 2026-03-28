@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color.h"
 #include "flecs.h"
 #include "SDL3/SDL_gpu.h"
 #include "glm.hpp"

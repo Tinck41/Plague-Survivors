@@ -21,23 +21,39 @@ CameraModule::CameraModule(flecs::world& world) {
 	//world.import<TimeModule>();
 	//world.import<RenderModule>();
 
+	world.component<VisibleEntities>()
+		.member<std::vector<flecs::entity>>("entities");
+
 	world.component<Camera>()
+		.add(flecs::With, world.component<VisibleEntities>())
 		.add(flecs::With, world.component<Transform>())
 //		.add(flecs::With, world.component<Velocity>())
 		.add(flecs::Exclusive);
 
 	world.component<Camera>()
+		.member<glm::vec2>("viewport")
 		.member<glm::vec2>("offset");
+
+	world.component<Visible2d>()
+		.member<bool>("value");
+
+	world.component<Aabb>()
+		.member<glm::vec2>("min")
+		.member<glm::vec2>("max");
 
 	world.system<Window, Camera>()
 		.kind(Phases::OnStart)
 		.each([](Window& window, Camera& c) {
-			int width;
-			int height;
+			c.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
+			c.viewport = glm::vec2(window.width, window.height);
+		});
 
-			SDL_GetWindowSize(window.handle, &width, &height);
-
-			c.projection = glm::ortho(0.f, static_cast<float>(width), static_cast<float>(height), 0.f, -1.f, 1.f);
+	world.observer<Camera, Window>()
+		.term_at(1).filter()
+		.event(flecs::OnAdd)
+		.each([](Camera& camera, Window& window) {
+			camera.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
+			camera.viewport = glm::vec2(window.width, window.height);
 		});
 
 	world.observer<Camera>()
@@ -46,6 +62,34 @@ CameraModule::CameraModule(flecs::world& world) {
 			const auto eventData = it.param<WindowResize>();
 
 			camera.projection = glm::ortho(0.f, static_cast<float>(eventData->width), static_cast<float>(eventData->height), 0.f, -1.f, 1.f);
+			camera.viewport = glm::vec2(eventData->width, eventData->height);
+		});
+
+	world.system<Visible2d>()
+		.kind(Phases::PreUpdate)
+		.each([](flecs::entity entity, Visible2d& visible) {
+			visible.value = false;
+		});
+
+	auto visible_query = world.query<Aabb, Visible2d>();
+
+	world.system<Camera, GlobalTransform, VisibleEntities>()
+		.kind(Phases::PostUpdate)
+		.each([visible_query](flecs::entity entity, Camera& camera, GlobalTransform& transform, VisibleEntities& visible_entities) {
+			visible_entities.entities.clear();
+
+			Aabb camera_aabb{
+				.min = glm::vec2(transform.translation),
+				.max = camera.viewport,
+			};
+
+			visible_query.each([&](flecs::entity entity, Aabb& other_aabb, Visible2d& visible) {
+				visible.value = camera_aabb.is_intersect(other_aabb);
+
+				if (visible.value) {
+					visible_entities.entities.emplace(entity);
+				}
+			});
 		});
 
 	//world.system<Application, Camera>()
@@ -71,6 +115,4 @@ CameraModule::CameraModule(flecs::world& world) {
 	//		g_camera.zoom   = t.scale.x;
 	//		g_camera.offset = Vector2{ c.offset.x + w.width * 0.5f, c.offset.y + w.height * 0.5f };
 	//	});
-
-	EcsCamera = world.entity("EcsCamera").add<Camera>();
 }

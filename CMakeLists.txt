@@ -38,6 +38,11 @@ add_executable(${PROJECT_NAME}
 	src/font.cpp
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
+	src/ecsModule/ui_module/module.h
+	src/ecsModule/ui_module/module.cpp
+	src/ecsModule/ui_render_module/components.h
+	src/ecsModule/ui_render_module/module.h
+	src/ecsModule/ui_render_module/module.cpp
 	#src/ecsModule/common.h
 	#src/ecsModule/uiModule/module.h
 	#src/ecsModule/uiModule/module.cpp
@@ -69,6 +74,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/meshModule/components.h
 	src/ecsModule/meshModule/module.h
 	src/ecsModule/meshModule/module.cpp
+	src/ecsModule/debug_module/module.h
+	src/ecsModule/debug_module/module.cpp
 	src/ecsModule/default_modules.h
 	src/ecsModule/default_modules.cpp
 	#src/ecsModule/tweenModule/module.h
@@ -77,6 +84,8 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/utils.cpp
 	src/utils/sdl.h
 	src/utils/sdl.cpp
+	src/color.h
+	src/color.cpp
 	src/utils/visit.h
 )
 

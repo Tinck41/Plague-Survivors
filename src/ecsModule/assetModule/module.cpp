@@ -24,6 +24,7 @@ std::shared_ptr<Texture> AssetStorage::load_texture(SDL_GPUDevice& gpu, const st
 	}
 
 	if (!textures.contains(path)) {
+		// TODO: add IMG_LoadGPUTexture
 		SDL_Surface* img = IMG_Load(path.c_str());
 		SDL_Surface* image = SDL_ConvertSurface(img, SDL_PIXELFORMAT_RGBA32);
 		SDL_GPUTextureCreateInfo texture_create_info{

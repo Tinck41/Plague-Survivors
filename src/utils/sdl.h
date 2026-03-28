@@ -6,7 +6,7 @@
 
 namespace ps {
 	struct GpuBuffer {
-		SDL_GPUBuffer* buffer;
+		SDL_GPUBuffer* data;
 		size_t size;
 	};
 

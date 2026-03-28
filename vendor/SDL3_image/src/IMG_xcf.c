@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -577,6 +577,7 @@ static xcf_level *read_xcf_level(SDL_IOStream *src, const xcf_header *h)
     if (!SDL_ReadU32BE (src, &l->width) ||
         !SDL_ReadU32BE (src, &l->height)) {
         free_xcf_level(l);
+        return NULL;
     }
 
     i = 0;
@@ -596,9 +597,6 @@ static void free_xcf_tile(unsigned char *t)
 static unsigned char *load_xcf_tile_none (SDL_IOStream *src, size_t len, int bpp, int x, int y)
 {
     unsigned char *load = NULL;
-    (void)bpp;
-    (void)x;
-    (void)y;
 
     load = (unsigned char *)SDL_malloc(len);
     if (load != NULL) {
@@ -1029,9 +1027,6 @@ done:
 }
 
 #else
-#if defined(_MSC_VER) && _MSC_VER >= 1300
-#pragma warning(disable : 4100) /* warning C4100: 'op' : unreferenced formal parameter */
-#endif
 
 /* See if an image is contained in a data source */
 bool IMG_isXCF(SDL_IOStream *src)
@@ -1042,6 +1037,7 @@ bool IMG_isXCF(SDL_IOStream *src)
 /* Load a XCF type image from an SDL datasource */
 SDL_Surface *IMG_LoadXCF_IO(SDL_IOStream *src)
 {
+    SDL_SetError("SDL_image built without XCF support");
     return NULL;
 }
 

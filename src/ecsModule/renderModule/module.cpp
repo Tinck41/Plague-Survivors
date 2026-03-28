@@ -2,17 +2,18 @@
 
 #include "SDL3_image/SDL_image.h"
 #include "SDL3/SDL.h"
-#include "ecsModule/assetModule/module.h"
+#include "ecsModule/cameraModule/module.h"
 #include "ecsModule/common.h"
+#include "ecsModule/spriteModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/windowModule/components.h"
 #include "ecsModule/windowModule/module.h"
-#include "ecsModule/cameraModule/module.h"
 #include "ext/matrix_clip_space.hpp"
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
 #include <algorithm>
+#include <ranges>
 
 using namespace ps;
 
@@ -27,13 +28,29 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<RenderCommands>().add(flecs::Singleton);
 	world.component<RenderDevice>().add(flecs::Singleton);
 	world.component<WhiteTexture>().add(flecs::Singleton);
-	world.component<RenderItems>().add(flecs::Singleton);
+	world.component<CameraRenderPhaseItems>().add(flecs::Singleton);
+	world.component<RenderStats>().add(flecs::Singleton);
+
+	world.component<RenderPass>();
+
+	world.component<Camera>()
+		.add(flecs::With, world.component<RenderPass>());
 
 	world.component<SDL_Color>()
 		.member<unsigned char>("r")
 		.member<unsigned char>("g")
 		.member<unsigned char>("b")
 		.member<unsigned char>("a");
+
+	world.component<RenderPhase>();
+	world.component<BindData>();
+	world.component<BindTexture>();
+
+	world.system("check render phase duplicates")
+		.kind(Phases::OnStart)
+		.each([] {
+			// TODO
+		});
 
 	world.system<Window, RenderDevice>()
 		.kind(Phases::OnStart)
@@ -93,7 +110,7 @@ RenderModule::RenderModule(flecs::world& world) {
 
 			SDL_ReleaseGPUTransferBuffer(render_device.gpu, tex_transfer_buf);
 
-			white_texture.texture = texture;
+			white_texture.texture = std::make_shared<Texture>(render_device.gpu, texture, glm::vec2{ 1.f, 1.f });
 		});
 
 	world.system<RenderDevice, CopyCommands>()
@@ -108,52 +125,84 @@ RenderModule::RenderModule(flecs::world& world) {
 			SDL_SubmitGPUCommandBuffer(copy_commands.buffer);
 		});
 
-	world.system<Window, RenderDevice, RenderCommands>()
+	world.system<RenderDevice, RenderCommands>()
 		.kind(Phases::Clear)
-		.each([](Window& window, RenderDevice& device, RenderCommands& render_commands) {
+		.each([](RenderDevice& device, RenderCommands& render_commands) {
 			render_commands.cmd_buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
+		});
 
-			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &render_commands.swapchain_texture, nullptr, nullptr) && SDL_GetError());
+	world.system<RenderPass, Window, RenderDevice, RenderCommands>()
+		.kind(Phases::Clear)
+		.each([](RenderPass& pass, Window& window, RenderDevice& device, RenderCommands& render_commands) {
+			if (!pass.target) {
+				assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &pass.target, nullptr, nullptr) && SDL_GetError());
+			}
 
 			auto color_target = SDL_GPUColorTargetInfo{
-				.texture = render_commands.swapchain_texture,
+				.texture = pass.target,
 				.clear_color = { 0.f, 0.f, 0.f, 1.f },
 				.load_op = SDL_GPU_LOADOP_CLEAR,
 				.store_op = SDL_GPU_STOREOP_STORE
 			};
 
-			render_commands.render_pass = SDL_BeginGPURenderPass(render_commands.cmd_buffer, &color_target, 1, nullptr);
+			pass.render_pass = SDL_BeginGPURenderPass(render_commands.cmd_buffer, &color_target, 1, nullptr);
 
 			SDL_PushGPUDebugGroup(render_commands.cmd_buffer, "render");
 		});
 
-	world.system<RenderItems>()
-		.kind(Phases::Render)
-		.each([world](RenderItems& items) {
-			std::ranges::sort(items, [](const RenderItem& lhs, const RenderItem& rhs) {
-				if (lhs.sort_value == rhs.sort_value) {
-					return lhs.entity < rhs.entity;
+	world.system<CameraRenderPhaseItems>("sort render data")
+		.kind(Phases::SortRenderData)
+		.each([](CameraRenderPhaseItems& render_items) {
+			for (auto& camera_items : render_items| std::ranges::views::values) {
+				for (auto& items : camera_items| std::ranges::views::values) {
+					std::ranges::sort(items, [](const RenderPhase& lhs, const RenderPhase& rhs) {
+						if (lhs.sort_value == rhs.sort_value) {
+							return lhs.entity < rhs.entity;
+						}
+						return lhs.sort_value < rhs.sort_value;
+					});
 				}
-				return lhs.sort_value < rhs.sort_value;
-			});
-
-			for (const auto& item : items) {
-				item.draw_function(item.entity, world);
 			}
 		});
 
-	world.system<RenderItems>()
-		.kind(Phases::PostRender)
-		.each([](RenderItems& items) {
-			items.clear();
+	world.system<VisibleEntities, CameraRenderPhaseItems, RenderStats>("new render")
+		.with<Camera>()
+		.kind(Phases::Render)
+		.each([&world](flecs::entity_t camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& phase_items, RenderStats& stats) {
+			stats.draw_calls = 0;
+
+			for (const auto& phase : render_phases_order) {
+				if (!phase_items.contains(camera) || !phase_items.at(camera).contains(phase) || phase_items.at(camera).at(phase).empty()) {
+					continue;
+				}
+
+				auto& items = phase_items.at(camera).at(phase);
+
+				size_t i = 0;
+
+				while (i < items.size()) {
+					const auto& item = items[i];
+
+					item.draw_function(camera, item.entity, world);
+					i += item.batch_size > 0 ? item.batch_size : 1;
+
+					++stats.draw_calls;
+				}
+
+				items.clear();
+			}
+		});
+
+	world.system<RenderPass, RenderCommands>()
+		.kind(Phases::Display)
+		.each([](RenderPass& pass, RenderCommands& render_commands) {
+			SDL_EndGPURenderPass(pass.render_pass);
+			SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
 		});
 
 	world.system<RenderCommands>()
 		.kind(Phases::Display)
 		.each([](RenderCommands& render_commands) {
-			SDL_EndGPURenderPass(render_commands.render_pass);
-			SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
-
 			assert(SDL_SubmitGPUCommandBuffer(render_commands.cmd_buffer) && SDL_GetError());
 		});
 
@@ -161,5 +210,6 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.add<CopyCommands>();
 	world.add<RenderCommands>();
 	world.add<WhiteTexture>();
-	world.add<RenderItems>();
+	world.add<CameraRenderPhaseItems>();
+	world.add<RenderStats>();
 }

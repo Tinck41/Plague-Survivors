@@ -1,6 +1,6 @@
 /*
   showanim:  A test application for the SDL image loading library.
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -25,15 +25,17 @@
 
 
 /* Draw a Gimpish background pattern to show transparency in the image */
-static void draw_background(SDL_Renderer *renderer, int w, int h)
+static void draw_background(SDL_Renderer *renderer)
 {
-    SDL_Color col[2] = {
+    const SDL_Color col[2] = {
         { 0x66, 0x66, 0x66, 0xff },
-        { 0x99, 0x99, 0x99, 0xff },
+        { 0x99, 0x99, 0x99, 0xff }
     };
-    int i, x, y;
-    SDL_FRect rect;
     const int dx = 8, dy = 8;
+    SDL_FRect rect;
+    int i, x, y, w, h;
+
+    SDL_GetCurrentRenderOutputSize(renderer, &w, &h);
 
     rect.w = (float)dx;
     rect.h = (float)dy;
@@ -50,6 +52,19 @@ static void draw_background(SDL_Renderer *renderer, int w, int h)
     }
 }
 
+static const char *get_file_path(const char *file)
+{
+    static char path[4096];
+
+    if (*file != '/' && !SDL_GetPathInfo(file, NULL)) {
+        SDL_snprintf(path, sizeof(path), "%s%s", SDL_GetBasePath(), file);
+        if (SDL_GetPathInfo(path, NULL)) {
+            return path;
+        }
+    }
+    return file;
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Window *window;
@@ -61,12 +76,13 @@ int main(int argc, char *argv[])
     int once = 0;
     int current_frame, delay;
     SDL_Event event;
+    const char *saveFile = NULL;
 
     (void)argc;
 
     /* Check command line usage */
     if ( ! argv[1] ) {
-        SDL_Log("Usage: %s [-fullscreen] <image_file> ...\n", argv[0]);
+        SDL_Log("Usage: %s [-fullscreen] [-save file] <image_file> ...\n", argv[0]);
         return(1);
     }
 
@@ -98,14 +114,26 @@ int main(int argc, char *argv[])
             continue;
         }
 
+        if (SDL_strcmp(argv[i], "-save") == 0 && argv[i + 1]) {
+            ++i;
+            saveFile = argv[i];
+            continue;
+        }
+
         /* Open the image file */
-        anim = IMG_LoadAnimation(argv[i]);
+        anim = IMG_LoadAnimation(get_file_path(argv[i]));
         if (!anim) {
             SDL_Log("Couldn't load %s: %s\n", argv[i], SDL_GetError());
             continue;
         }
         w = anim->w;
         h = anim->h;
+
+        if (saveFile) {
+            if (!IMG_SaveAnimation(anim, saveFile)) {
+                SDL_Log("Couldn't save animation: %s", SDL_GetError());
+            }
+        }
 
         textures = (SDL_Texture **)SDL_calloc(anim->count, sizeof(*textures));
         if (!textures) {
@@ -164,7 +192,7 @@ int main(int argc, char *argv[])
                 }
             }
             /* Draw a background pattern in case the image has transparency */
-            draw_background(renderer, w, h);
+            draw_background(renderer);
 
             /* Display the image */
             SDL_RenderTexture(renderer, textures[current_frame], NULL, NULL);
@@ -187,6 +215,7 @@ int main(int argc, char *argv[])
         for (j = 0; j < anim->count; ++j) {
             SDL_DestroyTexture(textures[j]);
         }
+        SDL_free(textures);
         IMG_FreeAnimation(anim);
     }
 

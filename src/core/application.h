@@ -3,6 +3,7 @@
 #include "flecs.h"
 
 #include <functional>
+#include <string>
 
 namespace ps {
 	class Application {
@@ -76,6 +77,12 @@ namespace ps {
 
 		Application& build_system(void(*callback)(flecs::world&)) {
 			callback(world);
+
+			return *this;
+		}
+
+		Application& add_script(const std::string& path) {
+			world.script().filename(path.c_str()).run();
 
 			return *this;
 		}

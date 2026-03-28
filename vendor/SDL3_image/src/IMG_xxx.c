@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -49,12 +49,11 @@ bool IMG_isXXX(SDL_IOStream *src)
 /* Remember to declare this procedure in IMG.h . */
 SDL_Surface *IMG_LoadXXX_IO(SDL_IOStream *src)
 {
-    int start;
-    const char *error = NULL;
+    Sint64 start;
     SDL_Surface *surface = NULL;
 
     if (!src) {
-        /* The error message has been set in SDL_IOFromFile */
+        SDL_InvalidParamError("src");
         return NULL;
     }
 
@@ -62,33 +61,22 @@ SDL_Surface *IMG_LoadXXX_IO(SDL_IOStream *src)
 
     /* Load the image here */
 
-    if (error) {
+    if (!surface) {
         SDL_SeekIO(src, start, SDL_IO_SEEK_SET);
-        if (surface) {
-            SDL_DestroySurface(surface);
-            surface = NULL;
-        }
-        SDL_SetError("%s", error);
     }
-
     return surface;
 }
 
 #else
 
-#if defined(_MSC_VER) && _MSC_VER >= 1300
-#pragma warning(disable : 4100) /* warning C4100: 'op' : unreferenced formal parameter */
-#endif
-
 bool IMG_isXXX(SDL_IOStream *src)
 {
-    (void) src;
     return false;
 }
 
 SDL_Surface *IMG_LoadXXX_IO(SDL_IOStream *src)
 {
-    (void) src;
+    SDL_SetError("SDL_image built without XXX support");
     return NULL;
 }
 

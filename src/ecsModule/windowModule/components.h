@@ -5,5 +5,8 @@
 namespace ps {
 	struct Window {
 		SDL_Window* handle;
+
+		int width;
+		int height;
 	};
 }

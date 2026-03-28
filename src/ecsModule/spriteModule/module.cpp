@@ -19,10 +19,10 @@ using namespace ps;
 
 constexpr uint32_t max_sprites_per_batch = 10'000;
 
-void draw_sprite(flecs::entity_t entity, const flecs::world& world) {
-	const auto& batches = world.get<SpriteBatches>();
+void draw_sprite(flecs::entity_t camera_entity, flecs::entity_t entity, const flecs::world& world) {
+	const auto& batches = world.get<CameraSpriteBatches>();
 
-	if (!batches.contains(entity)) {
+	if (!batches.contains(camera_entity) || !batches.at(camera_entity).contains(entity)) {
 		return;
 	}
 
@@ -30,11 +30,12 @@ void draw_sprite(flecs::entity_t entity, const flecs::world& world) {
 	const auto& storage = world.get<SpriteStorage>();
 	const auto& render_commands = world.get<RenderCommands>();
 
-	const auto camera = world.entity(CameraModule::EcsCamera);
+	const auto camera = world.entity(camera_entity);
 	const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
 	const auto view_proj = view * camera.get<Camera>().projection;
 
-	const auto& batch = batches.at(entity);
+	const auto& render_pass = camera.get<RenderPass>().render_pass;
+	const auto& batch = batches.at(camera_entity).at(entity);
 
 	SDL_GPUBufferBinding vertex_buffer_binding{
 		.buffer = storage.instance_buffer,
@@ -48,14 +49,14 @@ void draw_sprite(flecs::entity_t entity, const flecs::world& world) {
 		.sampler = pipeline.sampler,
 	};
 
-	SDL_BindGPUGraphicsPipeline(render_commands.render_pass, pipeline.pipeline);
-	SDL_BindGPUVertexBuffers(render_commands.render_pass, 0, &vertex_buffer_binding, 1);
-	SDL_BindGPUIndexBuffer(render_commands.render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-	SDL_BindGPUFragmentSamplers(render_commands.render_pass, 0, &texture_sampler_binding, 1);
+	SDL_BindGPUGraphicsPipeline(render_pass, pipeline.pipeline);
+	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_buffer_binding, 1);
+	SDL_BindGPUIndexBuffer(render_pass, &index_buffer_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+	SDL_BindGPUFragmentSamplers(render_pass, 0, &texture_sampler_binding, 1);
 
 	SDL_PushGPUVertexUniformData(render_commands.cmd_buffer, 0, &view_proj, sizeof(glm::mat4));
 
-	SDL_DrawGPUIndexedPrimitives(render_commands.render_pass, 6, batch.size, 0, 0, batch.first_instance);
+	SDL_DrawGPUIndexedPrimitives(render_pass, 6, batch.size, 0, 0, batch.first_instance);
 }
 
 SpriteModule::SpriteModule(flecs::world& world) {
@@ -64,13 +65,16 @@ SpriteModule::SpriteModule(flecs::world& world) {
 	world.import<WindowModule>();
 	world.import<RenderModule>();
 	world.import<TransformModule>();
+	world.import<CameraModule>();
 
 	world.component<SpritePipeline>().add(flecs::Singleton);
-	world.component<SpriteBatches>().add(flecs::Singleton);
 	world.component<SpriteStorage>().add(flecs::Singleton);
-	world.component<SpritesRenderData>().add(flecs::Singleton);
+	world.component<CameraSpriteBatches>().add(flecs::Singleton);
+	world.component<CameraCollectedSpriteItems>().add(flecs::Singleton);
 	world.component<Sprite>()
-		.add(flecs::With, world.component<Transform>());
+		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<Visible2d>())
+		.add(flecs::With, world.component<Aabb>());
 
 	world.component<std::string>()
 		.opaque(flecs::String)
@@ -92,6 +96,17 @@ SpriteModule::SpriteModule(flecs::world& world) {
 		.member<glm::vec2>("origin")
 		.member<std::optional<glm::vec2>>("custom_size")
 		.member<SDL_FColor>("color");
+
+	auto transparend_2d = world.component<Transparent2d>()
+		.is_a<RenderPhase>();
+
+	RenderModule::render_phases_order.emplace_back(transparend_2d);
+
+	world.observer<Sprite, WhiteTexture>()
+		.event(flecs::OnAdd)
+		.each([](flecs::entity e, Sprite& sprite, WhiteTexture& white_texture) {
+			sprite.texture = white_texture.texture;
+		});
 
 	world.system<Window, RenderDevice, SpritePipeline>("create sprite pipeline")
 		.kind(Phases::OnStart)
@@ -281,110 +296,124 @@ SpriteModule::SpriteModule(flecs::world& world) {
 			assert(SDL_SubmitGPUCommandBuffer(copy_cmd_buf) && SDL_GetError());
 		});
 
-	world.system<Sprite, GlobalTransform, SpritesRenderData>()
-		.kind(Phases::PostUpdate)
-		.each([](flecs::entity entity, Sprite& sprite, GlobalTransform& transform, SpritesRenderData& sprites_render_data) {
-			sprites_render_data.emplace_back(
-				entity,
-				sprite.texture,
-				transform,
-				sprite.color,
-				SpriteSingle{
-					.custom_size = sprite.custom_size
-				}
-			);
+	world.system<Sprite, Aabb, GlobalTransform>()
+		.kind(Phases::Update)
+		.each([](Sprite& sprite, Aabb& aabb, GlobalTransform& transform) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + sprite.texture->get_size();
 		});
 
-	world.system<SpritesRenderData>()
-		.kind(Phases::PostUpdate)
-		.each([world](SpritesRenderData& sprites_render_data) {
-			const auto& copy_commands = world.get<CopyCommands>();
-			const auto& pipeline = world.get<SpritePipeline>();
-			const auto& device = world.get<RenderDevice>();
-			const auto& storage = world.get<SpriteStorage>();
+	auto sprite_query = world.query<Sprite, GlobalTransform, Visible2d>();
 
-			auto& batches = world.get_mut<SpriteBatches>();
+	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedSpriteItems>("collect sprites")
+		.with<Camera>()
+		.kind(Phases::CollectRenderData)
+		.each([transparend_2d, sprite_query](flecs::entity camera_entity, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedSpriteItems& sprite_items) {
+			sprite_query.each([&](flecs::entity entity, Sprite& sprite, GlobalTransform& transform, Visible2d& visible) {
+				if (!visible.value) {
+					return;
+				}
 
-			batches.clear();
+				if (!visible_entities.entities.contains(entity)) {
+					return;
+				}
+
+				render_items[camera_entity][transparend_2d].emplace_back(entity, &draw_sprite, transform.translation.z);
+
+				sprite_items[camera_entity].lookup[entity] = sprite_items[camera_entity].items.size();
+				sprite_items[camera_entity].items.emplace_back(
+					entity,
+					sprite.texture,
+					transform,
+					sprite.color,
+					sprite.texture->get_size(),
+					SpriteSingle{
+						.custom_size = sprite.custom_size
+					}
+				);
+			});
+		});
+
+	world.system<CameraCollectedSpriteItems, CameraRenderPhaseItems, CameraSpriteBatches, SpriteStorage, RenderDevice, CopyCommands>("generate sprite batches")
+		.kind(Phases::PrepareRenderData)
+		.each([transparend_2d](CameraCollectedSpriteItems& camera_sprite_items, CameraRenderPhaseItems& camera_render_items, CameraSpriteBatches& camera_batches, SpriteStorage& storage, RenderDevice& device, CopyCommands& copy_commands) {
+			camera_batches.clear();
 
 			auto instances = static_cast<SpriteInstance*>(SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false));
-
 			uint32_t current_instance = 0;
 
-			flecs::entity_t current_batch_entity;
+			for (auto& [camera, camera_phase_items] : camera_render_items) {
+				auto& phase_items = camera_phase_items[transparend_2d];
+				auto& sprite_items = camera_sprite_items[camera];
+				auto& batches = camera_batches[camera];
 
-			for (auto& render_data : sprites_render_data) {
-				if (!render_data.texture) {
-					render_data.texture = pipeline.white_texture;
-				}
+				flecs::entity_t current_batch_entity = flecs::entity::null();
+				size_t current_batch_index = 0;
 
-				if (batches.empty() || batches.at(current_batch_entity).texture != render_data.texture || batches.at(current_batch_entity).size >= max_sprites_per_batch) {
-					current_batch_entity = render_data.entity;
+				for (size_t i = 0; i < phase_items.size(); ++i) {
+					const auto& render_data = phase_items[i];
 
-					batches.emplace(current_batch_entity, SpriteBatch{
-						.size = 0,
-						.first_instance = current_instance,
-						.texture = render_data.texture,
-					});
-				}
+					if (!sprite_items.lookup.contains(render_data.entity)) {
+						current_batch_entity = flecs::entity::null();
 
-				auto& current_batch = batches.at(current_batch_entity);
-
-
-				visit(render_data.kind, visitors{
-					[&](SpriteSingle& single) {
-						instances[current_instance].translation = glm::vec4(render_data.transform.translation, 0.f);
-						instances[current_instance].rotation    = glm::vec4(render_data.transform.rotation, 0.f);
-						instances[current_instance].scale       = glm::vec4(render_data.transform.scale * glm::vec3(single.custom_size.value_or(render_data.texture->get_size()), 0.f), 0.f);
-						instances[current_instance].color       = render_data.color;
-						instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
-						instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
-					},
-					[](SpriteSequence& sequence) {
-						// TODO?
+						continue;
 					}
-				});
 
-				++current_batch.size;
-				++current_instance;
+					const auto& sprite = sprite_items.items[sprite_items.lookup[render_data.entity]];
+
+					if (!current_batch_entity || batches.at(current_batch_entity).texture != sprite.texture || batches.at(current_batch_entity).size >= max_sprites_per_batch) {
+						current_batch_entity = sprite.entity;
+						current_batch_index = i;
+
+						batches.emplace(current_batch_entity, SpriteBatch{
+							.size = 0,
+							.first_instance = current_instance,
+							.texture = sprite.texture,
+						});
+					}
+
+					auto& current_batch = batches.at(current_batch_entity);
+
+					instances[current_instance].translation = glm::vec4(sprite.transform.translation, 0.f);
+					instances[current_instance].rotation    = glm::vec4(sprite.transform.rotation, 0.f);
+					instances[current_instance].scale       = glm::vec4(sprite.transform.scale * glm::vec3(sprite.size, 0.f), 0.f);
+					instances[current_instance].color       = sprite.color;
+					instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
+					instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
+
+					++current_batch.size;
+					++current_instance;
+					++phase_items[current_batch_index].batch_size;
+				}
+
+				sprite_items.items.clear();
+				sprite_items.lookup.clear();
+			}
+
+			if (current_instance == 0) {
+				return;
 			}
 
 			SDL_UnmapGPUTransferBuffer(device.gpu, storage.transfer_buffer);
 
 			auto copy_pass = SDL_BeginGPUCopyPass(copy_commands.buffer);
 
-			for (const auto& [_, batch] : batches) {
-				const auto offset = static_cast<Uint32>(batch.first_instance * sizeof(SpriteInstance));
+			const auto buffer_location = SDL_GPUTransferBufferLocation{
+				.transfer_buffer = storage.transfer_buffer,
+			};
 
-				const auto buffer_location = SDL_GPUTransferBufferLocation{
-					.transfer_buffer = storage.transfer_buffer,
-					.offset = offset,
-				};
+			const auto buffer_region = SDL_GPUBufferRegion{
+				.buffer = storage.instance_buffer,
+				.size = static_cast<Uint32>(current_instance * sizeof(SpriteInstance))
+			};
 
-				const auto buffer_region = SDL_GPUBufferRegion{
-					.buffer = storage.instance_buffer,
-					.offset = offset,
-					.size = static_cast<Uint32>(batch.size * sizeof(SpriteInstance))
-				};
-
-				SDL_UploadToGPUBuffer(copy_pass,  &buffer_location, &buffer_region, false);
-			}
+			SDL_UploadToGPUBuffer(copy_pass,  &buffer_location, &buffer_region, false);
 
 			SDL_EndGPUCopyPass(copy_pass);
 		});
 
-	world.system<SpritesRenderData, const SpritePipeline, RenderItems>()
-		.kind(Phases::PostUpdate)
-		.each([](SpritesRenderData& sprites_render_data, const SpritePipeline& pipeline, RenderItems& items) {
-			for (const auto& render_data : sprites_render_data) {
-				items.emplace_back(render_data.entity, render_data.transform.translation.z, &draw_sprite);
-			}
-
-			sprites_render_data.clear();
-		});
-
 	world.add<SpritePipeline>();
-	world.add<SpriteBatches>();
 	world.add<SpriteStorage>();
-	world.add<SpritesRenderData>();
+	world.add<CameraSpriteBatches>();
+	world.add<CameraCollectedSpriteItems>();
 }

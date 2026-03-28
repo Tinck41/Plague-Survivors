@@ -115,7 +115,7 @@ namespace ps {
 		std::optional<Rectangle> part;
 	};
 
-	struct Button {
+	struct Interaction {
 		glm::vec2 size;
 		Color defaultColor;
 		Color hoverColor;

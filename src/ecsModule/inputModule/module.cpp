@@ -7,6 +7,7 @@
 #include "core/app_state.h"
 
 #include "SDL3/SDL.h"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -196,10 +197,13 @@ InputModule::InputModule(flecs::world& world) {
 					SDL_GetWindowSize(window.handle, &event.width, &event.height);
 
 					world.event<WindowResize>()
-						.id(flecs::Any)
-						.entity(flecs::Any)
+						.id<Camera>()
+						.entity(camera)
 						.ctx(event)
 						.emit();
+
+					window.width = event.width;
+					window.height = event.height;
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {
 					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = !input.keys[sdl_key_to_ps_key(event.key.scancode)].remain;
@@ -210,6 +214,34 @@ InputModule::InputModule(flecs::world& world) {
 					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = false;
 					input.keys[sdl_key_to_ps_key(event.key.scancode)].remain = false;
 					input.keys[sdl_key_to_ps_key(event.key.scancode)].released = true;
+				}
+				else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+					input.mouse.position.x = event.motion.x;
+					input.mouse.position.y = event.motion.y;
+				}
+				else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+					if (event.button.button == SDL_BUTTON_LEFT) {
+						input.mouse.left.pressed = !input.mouse.left.remain;
+						input.mouse.left.remain = true;
+						input.mouse.left.released = false;
+					}
+					else if (event.button.button == SDL_BUTTON_RIGHT) {
+						input.mouse.right.pressed = !input.mouse.left.remain;
+						input.mouse.right.remain = true;
+						input.mouse.right.released = false;
+					}
+				}
+				else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+					if (event.button.button == SDL_BUTTON_LEFT) {
+						input.mouse.left.pressed = false;
+						input.mouse.left.remain = false;
+						input.mouse.left.released = true;
+					}
+					else if (event.button.button == SDL_BUTTON_RIGHT) {
+						input.mouse.right.pressed = false;
+						input.mouse.right.remain = false;
+						input.mouse.right.released = true;
+					}
 				}
 			}
 		});

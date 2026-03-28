@@ -83,9 +83,21 @@ void Application::init_phases() {
 		.add(flecs::Phase)
 		.depends_on(flecs::PostUpdate);
 
-	world.entity(Phases::Clear)
+	world.entity(Phases::CollectRenderData)
 		.add(flecs::Phase)
 		.depends_on(Phases::PostUpdate);
+
+	world.entity(Phases::SortRenderData)
+		.add(flecs::Phase)
+		.depends_on(Phases::CollectRenderData);
+
+	world.entity(Phases::PrepareRenderData)
+		.add(flecs::Phase)
+		.depends_on(Phases::SortRenderData);
+
+	world.entity(Phases::Clear)
+		.add(flecs::Phase)
+		.depends_on(Phases::PrepareRenderData);
 
 	world.entity(Phases::PreRender)
 		.add(flecs::Phase)

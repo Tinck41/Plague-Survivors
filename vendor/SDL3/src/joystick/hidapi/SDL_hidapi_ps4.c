@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -43,12 +43,6 @@
 #endif
 
 #define BLUETOOTH_DISCONNECT_TIMEOUT_MS 500
-
-#define LOAD16(A, B)       (Sint16)((Uint16)(A) | (((Uint16)(B)) << 8))
-#define LOAD32(A, B, C, D) ((((Uint32)(A)) << 0) |  \
-                            (((Uint32)(B)) << 8) |  \
-                            (((Uint32)(C)) << 16) | \
-                            (((Uint32)(D)) << 24))
 
 enum
 {
@@ -1003,8 +997,8 @@ static bool HIDAPI_DriverPS4_SetJoystickSensorsEnabled(SDL_HIDAPI_Device *device
 
 static void HIDAPI_DriverPS4_HandleStatePacket(SDL_Joystick *joystick, SDL_hid_device *dev, SDL_DriverPS4_Context *ctx, PS4StatePacket_t *packet, int size)
 {
-    static const float TOUCHPAD_SCALEX = 1.0f / 1920;
-    static const float TOUCHPAD_SCALEY = 1.0f / 920; // This is noted as being 944 resolution, but 920 feels better
+    static const float TOUCHPAD_SCALEX = 5.20833333e-4f; // 1.0f / 1920
+    static const float TOUCHPAD_SCALEY = 1.08695652e-3f; // 1.0f / 920 // This is noted as being 944 resolution, but 920 feels better
     Sint16 axis;
     bool touchpad_down;
     int touchpad_x, touchpad_y;

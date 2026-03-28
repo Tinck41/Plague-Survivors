@@ -41,7 +41,7 @@ UiModule::UiModule(flecs::world& world) {
 		.add(flecs::With, world.component<Node>());
 	world.component<Text>()
 		.add(flecs::With, world.component<Node>());
-	world.component<Button>()
+	world.component<Interaction>()
 		.add(flecs::With, world.component<Node>())
 		.add(flecs::With, world.component<Interaction>());
 	world.component<Grid>()
@@ -312,9 +312,9 @@ UiModule::UiModule(flecs::world& world) {
 			}
 		});
 
-	world.system<const Interaction, const Button, BackgroundColor>()
+	world.system<const Interaction, const Interaction, BackgroundColor>()
 		.kind(Phases::Update)
-		.each([](flecs::entity e, const Interaction& i, const Button& b, BackgroundColor& c) {
+		.each([](flecs::entity e, const Interaction& i, const Interaction& b, BackgroundColor& c) {
 			switch (i.type) {
 				case Interaction::eType::Hovered:
 					c = b.hoverColor;

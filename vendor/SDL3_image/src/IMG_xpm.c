@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -198,8 +198,7 @@ static int color_to_argb(char *spec, int speclen, Uint32 *argb)
         { "red",                  0xffFF0000 },
         { "green",                0xff00FF00 },
         { "blue",                 0xff0000FF },
-/* This table increases the size of the library by 40K, so it's disabled by default */
-#ifdef EXTENDED_XPM_COLORS
+#ifndef DISABLE_EXTENDED_XPM_COLORS
         { "aliceblue",            0xfff0f8ff },
         { "antiquewhite",         0xfffaebd7 },
         { "antiquewhite1",        0xffffefdb },
@@ -877,7 +876,7 @@ static int color_to_argb(char *spec, int speclen, Uint32 *argb)
         { "yellow3",              0xffCDCD00 },
         { "yellow4",              0xff8B8B00 },
         { "yellowgreen",          0xff9acd32 },
-#endif /* EXTENDED_XPM_COLORS */
+#endif /* !DISABLE_EXTENDED_XPM_COLORS */
     };
 
     if (spec[0] == '#') {
@@ -1095,7 +1094,7 @@ static SDL_Surface *load_xpm(char **xpm, SDL_IOStream *src, bool force_32bit)
         for (;;) {
             char nametype;
             char *colname;
-            Uint32 argb, pixel;
+            Uint32 argb, pixelvalue;
 
             SKIPSPACE(p);
             if (!*p) {
@@ -1120,14 +1119,14 @@ static SDL_Surface *load_xpm(char **xpm, SDL_IOStream *src, bool force_32bit)
                 c->r = (Uint8)(argb >> 16);
                 c->g = (Uint8)(argb >> 8);
                 c->b = (Uint8)(argb);
-                pixel = index;
+                pixelvalue = index;
                 if (argb == 0x00000000) {
-                    SDL_SetSurfaceColorKey(image, true, pixel);
+                    SDL_SetSurfaceColorKey(image, true, pixelvalue);
                 }
             } else {
-                pixel = argb;
+                pixelvalue = argb;
             }
-            add_colorhash(colors, nextkey, cpp, pixel);
+            add_colorhash(colors, nextkey, cpp, pixelvalue);
             nextkey += cpp;
             break;
         }
@@ -1208,9 +1207,6 @@ SDL_Surface *IMG_ReadXPMFromArrayToRGB888(char **xpm)
 }
 
 #else  /* not LOAD_XPM */
-#if defined(_MSC_VER) && _MSC_VER >= 1300
-#pragma warning(disable : 4100) /* warning C4100: 'op' : unreferenced formal parameter */
-#endif
 
 /* See if an image is contained in a data source */
 bool IMG_isXPM(SDL_IOStream *src)
@@ -1218,20 +1214,22 @@ bool IMG_isXPM(SDL_IOStream *src)
     return false;
 }
 
-
 /* Load a XPM type image from an SDL datasource */
 SDL_Surface *IMG_LoadXPM_IO(SDL_IOStream *src)
 {
+    SDL_SetError("SDL_image built without XPM support");
     return NULL;
 }
 
 SDL_Surface *IMG_ReadXPMFromArray(char **xpm)
 {
+    SDL_SetError("SDL_image built without XPM support");
     return NULL;
 }
 
 SDL_Surface *IMG_ReadXPMFromArrayToRGB888(char **xpm)
 {
+    SDL_SetError("SDL_image built without XPM support");
     return NULL;
 }
 

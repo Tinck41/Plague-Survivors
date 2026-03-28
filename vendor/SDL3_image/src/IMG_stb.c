@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -174,6 +174,8 @@ SDL_Surface *IMG_LoadSTB_IO(SDL_IOStream *src)
             if (has_alpha) {
                 SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
             } else if (has_colorkey) {
+                /* remove redundant pixel alpha before setting colorkey */
+                palette->colors[colorkey_index].a = SDL_ALPHA_OPAQUE;
                 SDL_SetSurfaceColorKey(surface, true, colorkey_index);
             }
 

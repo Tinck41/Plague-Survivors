@@ -13,14 +13,17 @@
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
-#include "font.h"
+#include <algorithm>
 
 using namespace ps;
 
-void draw_text(flecs::entity_t entity, const flecs::world& world) {
-	const auto& batches = world.get<TextBatches>();
+#define TEXT_MAX_VERTEX_COUNT 4000
+#define TEXT_MAX_INDEX_COUNT  6000
 
-	if (!batches.contains(entity)) {
+void draw_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::world& world) {
+	const auto& batches = world.get<CameraTextBatches>();
+
+	if (!batches.contains(camera) || !batches.at(camera).contains(entity) || batches.at(camera).at(entity).empty()) {
 		return;
 	}
 
@@ -28,46 +31,35 @@ void draw_text(flecs::entity_t entity, const flecs::world& world) {
 	const auto& storage = world.get<TextStorage>();
 	const auto& commands = world.get<RenderCommands>();
 
-	auto batch = batches.at(entity);
+	auto& batch_seq = batches.at(camera).at(entity);
 
 	SDL_GPUBufferBinding vertex_bindings{
-		.buffer = storage.vertex_buffer, .offset = 0
+		.buffer = storage.vertex_buffer,
 	};
 	SDL_GPUBufferBinding index_bindings{
-		.buffer = storage.index_buffer, .offset = 0
+		.buffer = storage.index_buffer,
 	};
 
-	const auto camera = world.entity(CameraModule::EcsCamera);
-	const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
-	const auto view_proj = view * camera.get<Camera>().projection;
+	const auto camera_entity = world.entity(CameraModule::EcsCamera);
+	const auto view = glm::translate(glm::mat4(1.f), -camera_entity.get<GlobalTransform>().translation);
+	const auto view_proj = view * camera_entity.get<Camera>().projection;
 
-	std::array<glm::mat4, 2> matrices{
-		view_proj,
-		glm::scale(world.entity(entity).get<GlobalTransform>().matrix, glm::vec3(1.f, -1.f, 1.f)) // TODO
-	};
+	const auto& render_pass = camera_entity.get<RenderPass>().render_pass;
 
-	SDL_BindGPUGraphicsPipeline(commands.render_pass, pipeline.pipeline);
-	SDL_BindGPUVertexBuffers(commands.render_pass, 0, &vertex_bindings, 1);
-	SDL_BindGPUIndexBuffer(commands.render_pass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-	SDL_PushGPUVertexUniformData(commands.cmd_buffer, 0, &matrices, sizeof(glm::mat4) * 2);
+	SDL_BindGPUGraphicsPipeline(render_pass, pipeline.pipeline);
+	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_bindings, 1);
+	SDL_BindGPUIndexBuffer(render_pass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+	SDL_PushGPUVertexUniformData(commands.cmd_buffer, 0, &view_proj, sizeof(glm::mat4));
 
-	int index_offset = 0;
-	int vertex_offset = 0;
-
-	while (batch != nullptr) {
+	for (const auto& batch : batch_seq) {
 		SDL_GPUTextureSamplerBinding bindings{
-			.texture = batch->atlas_texture,
+			.texture = batch.texture,
 			.sampler = pipeline.sampler,
 		};
 
-		SDL_BindGPUFragmentSamplers(commands.render_pass, 0, &bindings, 1);
+		SDL_BindGPUFragmentSamplers(render_pass, 0, &bindings, 1);
 
-		SDL_DrawGPUIndexedPrimitives(commands.render_pass, batch->num_indices, 1, index_offset, vertex_offset, 0);
-
-		index_offset += batch->num_indices;
-		vertex_offset += batch->num_vertices;
-
-		batch = batch->next;
+		SDL_DrawGPUIndexedPrimitives(render_pass, batch.num_indices, 1, batch.index_offset, 0, 0);
 	}
 }
 
@@ -76,13 +68,40 @@ TextModule::TextModule(flecs::world& world) {
 
 	world.import<WindowModule>();
 	world.import<RenderModule>();
+	world.import<CameraModule>();
 	world.import<SpriteModule>();
 	world.import<TransformModule>();
 
 	world.component<TextStorage>().add(flecs::Singleton);
 	world.component<TextPipeline>().add(flecs::Singleton);
-	world.component<TextBatches>().add(flecs::Singleton);
-	world.component<Text>()
+	world.component<CameraCollectedTextItems>().add(flecs::Singleton);
+	world.component<CameraTextBatches>().add(flecs::Singleton);
+
+	world.component<glm::ivec2>()
+		.member<int>("x")
+		.member<int>("y");
+
+	world.component<TextFont>();
+	world.component<TextColor>();
+	world.component<TextData>()
+		.member<glm::ivec2>("size");
+
+	world.component<Color>()
+		.member<std::uint8_t>("r")
+		.member<std::uint8_t>("g")
+		.member<std::uint8_t>("b")
+		.member<std::uint8_t>("a");
+
+	world.component<TextColor>()
+		.is_a<Color>();
+
+	world.component<Text2d>()
+		.is_a<std::string>()
+		.add(flecs::With, world.component<Aabb>())
+		.add(flecs::With, world.component<Visible2d>())
+		.add(flecs::With, world.component<TextData>())
+		.add(flecs::With, world.component<TextFont>())
+		.add(flecs::With, world.component<TextColor>())
 		.add(flecs::With, world.component<Transform>());
 
 	world.system<Window, RenderDevice, TextPipeline>()
@@ -170,29 +189,26 @@ TextModule::TextModule(flecs::world& world) {
 
 			SDL_ReleaseGPUShader(device.gpu, vert_shader);
 			SDL_ReleaseGPUShader(device.gpu, frag_shader);
-			
+
 			pipeline.engine = TTF_CreateGPUTextEngine(device.gpu);
 		});
 
 	world.system<RenderDevice, TextStorage>()
 		.kind(Phases::OnStart)
 		.each([](RenderDevice& device, TextStorage& storage) {
-			constexpr auto max_indecies = 100'000;
-			constexpr auto max_vertices = 100'000;
-
 			SDL_GPUBufferCreateInfo vertex_buffer_create_info{
 				.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-				.size = sizeof(Vertex) * max_vertices,
+				.size = sizeof(Vertex) * TEXT_MAX_VERTEX_COUNT,
 			};
 
 			SDL_GPUBufferCreateInfo index_buffer_create_info{
 				.usage = SDL_GPU_BUFFERUSAGE_INDEX,
-				.size = sizeof(int) * max_indecies,
+				.size = sizeof(int) * TEXT_MAX_INDEX_COUNT,
 			};
 
 			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
 				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-				.size = (sizeof(Vertex) * max_vertices) + (sizeof(int) * max_indecies)
+				.size = (sizeof(Vertex) * TEXT_MAX_VERTEX_COUNT) + (sizeof(int) * TEXT_MAX_INDEX_COUNT)
 			};
 
 			storage.vertex_buffer = SDL_CreateGPUBuffer(device.gpu, &vertex_buffer_create_info);
@@ -200,64 +216,149 @@ TextModule::TextModule(flecs::world& world) {
 			storage.transfer_buffer = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
 		});
 
-	world.observer<Text, TextStorage, TextPipeline>()
+	world.observer<Text2d, TextData, TextFont, TextPipeline>()
 		.event(flecs::OnSet)
-		.each([](flecs::entity e, Text& text, TextStorage& storage, TextPipeline& pipeline){
-			storage.text_data[text.string] = TTF_CreateText(pipeline.engine, *text.font, text.string.c_str(), text.string.size());
+		.each([](flecs::entity e, Text2d& text, TextData& data, TextFont& font, TextPipeline& pipeline){
+			TTF_DestroyText(data.ttf_data);
+			data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
+			TTF_GetTextSize(data.ttf_data, &data.size.x, &data.size.y);
 		});
 
-	world.system<Text>()
-		.kind(Phases::PostUpdate)
-		.run([](flecs::iter& it) {
-			auto& storage = it.world().get<TextStorage>();
-			auto& batches = it.world().get_mut<TextBatches>();
+	world.observer<Text2d, TextData>()
+		.event(flecs::OnRemove)
+		.each([](flecs::entity e, Text2d& text, TextData& data){
+			TTF_DestroyText(data.ttf_data);
+			data.size = { 0, 0 };
+		});
 
-			batches.clear();
+	world.system<TextData, GlobalTransform, Aabb>()
+		.with<Text2d>()
+		.kind(Phases::Update)
+		.each([](TextData& data, GlobalTransform& transform, Aabb& aabb) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + glm::vec2(data.size);
+		});
 
-			while(it.next()) {
-				auto texts = it.field<Text>(0);
+	auto transparent_2d = world.component<Transparent2d>();
+	auto text_query = world.query<Text2d, TextData, TextColor, GlobalTransform, Visible2d>();
 
-				for (int i : it) {
-					const auto& text = texts[i];
-
-					batches[it.entity(i)] = TTF_GetGPUTextDrawData(storage.text_data.at(text.string));
+	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedTextItems>()
+		.with<Camera>()
+		.kind(Phases::CollectRenderData)
+		.each([transparent_2d, text_query](flecs::entity camera_entity, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedTextItems& text_items) {
+			text_query.each([&](flecs::entity entity, Text2d& text, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {
+				if (!visible.value) {
+					return;
 				}
-			}
+
+				if (!visible_entities.entities.contains(entity)) {
+					return;
+				}
+
+				render_items[camera_entity][transparent_2d].emplace_back(entity, &draw_text, transform.translation.z);
+
+				text_items[camera_entity].lookup[entity] = text_items[camera_entity].items.size();
+				text_items[camera_entity].items.emplace_back(entity, nullptr, transform, color, data.ttf_data);
 		});
+	});
 
-	world.system<const Text, TextStorage, TextPipeline, RenderDevice, CopyCommands>()
-		.kind(Phases::PostUpdate)
-		.each([world](flecs::entity e, const Text& text, TextStorage& storage, TextPipeline& pipeline, RenderDevice& device, CopyCommands& commands) {
-			auto data = TTF_GetGPUTextDrawData(storage.text_data.at(text.string));
+	world.system<CameraCollectedTextItems, CameraRenderPhaseItems, TextStorage, CameraTextBatches, RenderDevice, CopyCommands>()
+		.kind(Phases::PrepareRenderData)
+		.each([transparent_2d](CameraCollectedTextItems& camera_text_items, CameraRenderPhaseItems& camera_render_items, TextStorage& storage, CameraTextBatches& camera_batches, RenderDevice& device, CopyCommands& commands) {
+			camera_batches.clear();
 
-			// TODO: do not alloc every frame
-			auto indices = static_cast<int*>(SDL_calloc(10'000, sizeof(int)));
+			auto transfer_buffer = SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false);
 
-			auto transfer_data = static_cast<Vertex*>(SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false));
+			auto vertices = static_cast<Vertex*>(transfer_buffer);
+			auto indices = reinterpret_cast<int*>(vertices + TEXT_MAX_VERTEX_COUNT);
+
 			auto vertex_count = 0;
 			auto index_count = 0;
 
-			for (auto seq = data; seq != nullptr; seq = seq->next) {
-				for (int i = 0; i < seq->num_vertices; i++) {
-					const auto pos = seq->xy[i];
-					const auto uv = seq->uv[i];
+			for (auto& [camera, camera_phase_items] : camera_render_items) {
+				auto& phase_items = camera_phase_items[transparent_2d];
+				auto& text_items = camera_text_items[camera];
+				auto& batches = camera_batches[camera];
 
-					Vertex vert{
-						.position{ pos.x, pos.y, 0.f },
-						.uv{ uv.x, uv.y }
-					};
+				flecs::entity_t current_batch_entity = flecs::entity::null();
+				size_t current_batch_index = 0;
 
-					transfer_data[vertex_count + i] = vert;
+				for (size_t i = 0; i < phase_items.size(); ++i) {
+					const auto& data = phase_items[i];
+
+					if (!text_items.lookup.contains(data.entity)) {
+						current_batch_entity = flecs::entity::null();
+
+						continue;
+					}
+
+					auto& text_data = text_items.items[text_items.lookup[data.entity]];
+
+					auto seq = TTF_GetGPUTextDrawData(text_data.ttf_data);
+
+					if (!seq) {
+						current_batch_entity = flecs::entity::null();
+
+						continue;
+					}
+
+					if (!current_batch_entity || batches.at(current_batch_entity).back().texture != seq->atlas_texture) {
+						current_batch_entity = text_data.entity;
+						current_batch_index = i;
+
+						batches[current_batch_entity].emplace_back(
+							static_cast<size_t>(index_count),
+							0,
+							seq->atlas_texture
+						);
+					}
+
+					auto& current_batch = batches.at(current_batch_entity).back();
+
+					while (seq) {
+						if (seq->atlas_texture != current_batch.texture) {
+							current_batch_entity = text_data.entity;
+							current_batch_index = i;
+
+							batches[current_batch_entity].emplace_back(
+								static_cast<size_t>(index_count),
+								0,
+								seq->atlas_texture
+							);
+
+							current_batch = batches.at(current_batch_entity).back();
+						}
+
+						for (int j = 0; j < seq->num_vertices; j++) {
+							const auto pos = seq->xy[j];
+							const auto uv = seq->uv[j];
+
+							vertices[vertex_count + j] = Vertex{
+								.position{ text_data.transform.translation + glm::vec3{ pos.x, -pos.y, 0.f } },
+								.color = text_data.color,
+								.uv{ uv.x, uv.y },
+							};
+						}
+
+						for (int j = 0; j < seq->num_indices; j++) {
+							indices[index_count + j] = seq->indices[j] + vertex_count;
+						}
+
+						vertex_count += seq->num_vertices;
+						index_count += seq->num_indices;
+
+						current_batch.num_indices += seq->num_indices;
+
+						seq = seq->next;
+					}
+
+					++phase_items[current_batch_index].batch_size;
 				}
-
-				SDL_memcpy(indices + index_count, seq->indices, seq->num_indices * sizeof(int));
-
-				vertex_count += seq->num_vertices;
-				index_count += seq->num_indices;
 			}
 
-			SDL_memcpy(transfer_data + 10'000, indices, sizeof(int) * index_count);
-			SDL_free(indices);
+			if (vertex_count == 0 || index_count == 0) {
+				return;
+			}
 
 			SDL_UnmapGPUTransferBuffer(device.gpu, storage.transfer_buffer);
 
@@ -277,7 +378,7 @@ TextModule::TextModule(flecs::world& world) {
 
 			SDL_GPUTransferBufferLocation index_transfer_buffer_location {
 				.transfer_buffer = storage.transfer_buffer,
-				.offset = sizeof(Vertex) * 10'000
+				.offset = static_cast<Uint32>(sizeof(Vertex) * TEXT_MAX_VERTEX_COUNT)
 			};
 			SDL_GPUBufferRegion index_buffer_region {
 				.buffer = storage.index_buffer,
@@ -290,15 +391,10 @@ TextModule::TextModule(flecs::world& world) {
 			SDL_EndGPUCopyPass(copy_pass);
 		});
 
-	world.system<Text, GlobalTransform, RenderItems>()
-		.kind(Phases::PostUpdate)
-		.each([](flecs::entity entity, Text& text, const GlobalTransform& transform, RenderItems& items) {
-			items.emplace_back(entity, transform.translation.z, &draw_text);
-		});
-
 	TTF_Init();
 
 	world.add<TextStorage>();
 	world.add<TextPipeline>();
-	world.add<TextBatches>();
+	world.add<CameraTextBatches>();
+	world.add<CameraCollectedTextItems>();
 }

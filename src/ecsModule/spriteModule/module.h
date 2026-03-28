@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "flecs.h"
 #include "SDL3/SDL.h"
@@ -32,13 +33,21 @@ namespace ps {
 
 	using SpriteKind = std::variant<SpriteSingle, SpriteSequence>;
 
-	struct SpriteRenderData {
+	struct CollectedSpriteItem {
 		flecs::entity_t entity;
 		std::shared_ptr<Texture> texture;
 		Transform transform;
 		glm::vec4 color;
+		glm::vec2 size;
 		SpriteKind kind;
 	};
+
+	struct CollectedSpriteItems {
+		std::vector<CollectedSpriteItem> items;
+		std::unordered_map<flecs::entity_t, size_t> lookup;
+	};
+
+	using CameraCollectedSpriteItems = std::map<flecs::entity_t, CollectedSpriteItems>;
 
 	struct SpriteRangeRenderData {
 		glm::vec3 position;
@@ -46,7 +55,6 @@ namespace ps {
 		glm::vec2 uv;
 	};
 
-	using SpritesRenderData = std::vector<SpriteRenderData>;
 	using SpritesRangeRenderData = std::vector<SpriteRangeRenderData>;
 
 	struct SpriteInstance {
@@ -79,6 +87,9 @@ namespace ps {
 	};
 
 	using SpriteBatches = std::map<flecs::entity_t, SpriteBatch>;
+	using CameraSpriteBatches = std::map<flecs::entity_t, SpriteBatches>;
+
+	struct Transparent2d : public RenderPhase {};
 
 	struct SpriteModule {
 		SpriteModule(flecs::world& world);

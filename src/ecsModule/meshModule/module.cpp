@@ -20,7 +20,7 @@ MeshModule::MeshModule(flecs::world& world) {
 	world.system<RenderDevice, QuadMesh>()
 		.kind(Phases::OnStart)
 		.each([](RenderDevice& device, QuadMesh& quad) {
-			constexpr auto white = glm::vec4{ 1, 1, 1, 1 };
+			const auto white = WHITE;
 
 			std::array<Vertex, 4> verticies{
 				Vertex{ glm::vec3{ 0.f, 1.f, 0.f }, white, { 0.f, 1.f }},
