@@ -131,23 +131,10 @@ RenderModule::RenderModule(flecs::world& world) {
 			render_commands.cmd_buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
 		});
 
-	world.system<RenderPass, Window, RenderDevice, RenderCommands>()
-		.kind(Phases::Clear)
-		.each([](RenderPass& pass, Window& window, RenderDevice& device, RenderCommands& render_commands) {
-			if (!pass.target) {
-				assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &pass.target, nullptr, nullptr) && SDL_GetError());
-			}
-
-			auto color_target = SDL_GPUColorTargetInfo{
-				.texture = pass.target,
-				.clear_color = { 0.f, 0.f, 0.f, 1.f },
-				.load_op = SDL_GPU_LOADOP_CLEAR,
-				.store_op = SDL_GPU_STOREOP_STORE
-			};
-
-			pass.render_pass = SDL_BeginGPURenderPass(render_commands.cmd_buffer, &color_target, 1, nullptr);
-
-			SDL_PushGPUDebugGroup(render_commands.cmd_buffer, "render");
+	world.system<Window, RenderCommands>()
+		.kind(Phases::PreRender)
+		.each([&world](Window& window, RenderCommands& render_commands) {
+			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &render_commands.swapchain_texture, nullptr, nullptr) && SDL_GetError());
 		});
 
 	world.system<CameraRenderPhaseItems>("sort render data")
@@ -165,25 +152,39 @@ RenderModule::RenderModule(flecs::world& world) {
 			}
 		});
 
-	world.system<VisibleEntities, CameraRenderPhaseItems, RenderStats>("new render")
-		.with<Camera>()
+	world.system<Camera, RenderPass, Window, RenderDevice, RenderCommands, CameraRenderPhaseItems, RenderStats>()
 		.kind(Phases::Render)
-		.each([&world](flecs::entity_t camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& phase_items, RenderStats& stats) {
+		.each([&world](flecs::entity camera_entity, Camera& camera, RenderPass& pass, Window& window, RenderDevice& device, RenderCommands& render_commands, CameraRenderPhaseItems& phase_items, RenderStats& stats) {
+			pass.target = camera.render_texture
+				? &camera.render_texture->get_gpu_texture()
+				: render_commands.swapchain_texture;
+
+			auto color_target = SDL_GPUColorTargetInfo{
+				.texture = pass.target,
+				.clear_color = camera.clear_color,
+				.load_op = camera.load_op,
+				.store_op = SDL_GPU_STOREOP_STORE
+			};
+
+			pass.render_pass = SDL_BeginGPURenderPass(render_commands.cmd_buffer, &color_target, 1, nullptr);
+
+			SDL_PushGPUDebugGroup(render_commands.cmd_buffer, std::format("camera: {}", camera_entity.name() ? std::string(camera_entity.name()) : std::to_string(camera_entity.id())).c_str());
+
 			stats.draw_calls = 0;
 
 			for (const auto& phase : render_phases_order) {
-				if (!phase_items.contains(camera) || !phase_items.at(camera).contains(phase) || phase_items.at(camera).at(phase).empty()) {
+				if (!phase_items.contains(camera_entity) || !phase_items.at(camera_entity).contains(phase) || phase_items.at(camera_entity).at(phase).empty()) {
 					continue;
 				}
 
-				auto& items = phase_items.at(camera).at(phase);
+				auto& items = phase_items.at(camera_entity).at(phase);
 
 				size_t i = 0;
 
 				while (i < items.size()) {
 					const auto& item = items[i];
 
-					item.draw_function(camera, item.entity, world);
+					item.draw_function(camera_entity, item.entity, world);
 					i += item.batch_size > 0 ? item.batch_size : 1;
 
 					++stats.draw_calls;
@@ -191,11 +192,7 @@ RenderModule::RenderModule(flecs::world& world) {
 
 				items.clear();
 			}
-		});
 
-	world.system<RenderPass, RenderCommands>()
-		.kind(Phases::Display)
-		.each([](RenderPass& pass, RenderCommands& render_commands) {
 			SDL_EndGPURenderPass(pass.render_pass);
 			SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
 		});

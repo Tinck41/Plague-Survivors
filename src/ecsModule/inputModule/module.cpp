@@ -190,17 +190,17 @@ InputModule::InputModule(flecs::world& world) {
 					app_state = AppState::Exit;
 				}
 				else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-					const auto camera = world.entity(CameraModule::EcsCamera);
-
 					WindowResize event;
 
 					SDL_GetWindowSize(window.handle, &event.width, &event.height);
 
-					world.event<WindowResize>()
-						.id<Camera>()
-						.entity(camera)
-						.ctx(event)
-						.emit();
+					world.each<Camera>([&](flecs::entity entity, Camera& camera) {
+						world.event<WindowResize>()
+							.id<Camera>()
+							.entity(entity)
+							.ctx(event)
+							.emit();
+					});
 
 					window.width = event.width;
 					window.height = event.height;

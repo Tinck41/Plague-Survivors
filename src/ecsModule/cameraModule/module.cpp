@@ -80,7 +80,7 @@ CameraModule::CameraModule(flecs::world& world) {
 
 			Aabb camera_aabb{
 				.min = glm::vec2(transform.translation),
-				.max = camera.viewport,
+				.max = glm::vec2(transform.translation) + camera.viewport,
 			};
 
 			visible_query.each([&](flecs::entity entity, Aabb& other_aabb, Visible2d& visible) {

@@ -566,7 +566,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				auto& batches = camera_batches[camera];
 
 				if (phase_items.empty() || ui_items.items.empty()) {
-					return;
+					continue;
 				}
 
 				flecs::entity_t current_batch_entity = flecs::entity::null();
@@ -657,7 +657,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				auto& batches = camera_batches[camera];
 
 				if (phase_items.empty() || text_items.items.empty()) {
-					return;
+					continue;
 				}
 
 				flecs::entity_t current_batch_entity = flecs::entity::null();

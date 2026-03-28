@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color.h"
 #include "flecs.h"
 #include "vec2.hpp"
 #include "mat4x4.hpp"
@@ -16,6 +17,10 @@ namespace ps {
 		glm::mat4 projection;
 
 		std::shared_ptr<Texture> render_texture;
+
+		Color clear_color = BLACK;
+
+		SDL_GPULoadOp load_op = SDL_GPU_LOADOP_CLEAR;
 	};
 
 	struct WindowResize {
@@ -50,7 +55,5 @@ namespace ps {
 
 	struct CameraModule {
 		CameraModule(flecs::world& world);
-
-		inline static flecs::entity_t EcsCamera;
 	};
 }

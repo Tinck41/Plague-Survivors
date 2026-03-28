@@ -53,7 +53,9 @@ void init(flecs::world& world, ps::AssetStorage& storage, ps::RenderDevice& devi
 	using namespace ps;
 	//auto parent = world.entity("parent").add<ps::Node>();
 
-	CameraModule::EcsCamera = world.entity("EcsCamera").add<Camera>();
+	world.entity("EcsCamera")
+		.set<Transform>({ .translation = { 0.f, 0.f, 0.f } })
+		.add<Camera>();
 
 	//world.entity("image")
 	//	.set<ps::Image>({ .texture = storage.load_texture(*device.gpu, "assets/main_menu.jpg") })

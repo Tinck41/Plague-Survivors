@@ -32,7 +32,7 @@ void draw_sprite(flecs::entity_t camera_entity, flecs::entity_t entity, const fl
 
 	const auto camera = world.entity(camera_entity);
 	const auto view = glm::translate(glm::mat4(1.f), -camera.get<GlobalTransform>().translation);
-	const auto view_proj = view * camera.get<Camera>().projection;
+	const auto view_proj = camera.get<Camera>().projection * view;
 
 	const auto& render_pass = camera.get<RenderPass>().render_pass;
 	const auto& batch = batches.at(camera_entity).at(entity);

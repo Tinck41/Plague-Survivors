@@ -40,9 +40,9 @@ void draw_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::worl
 		.buffer = storage.index_buffer,
 	};
 
-	const auto camera_entity = world.entity(CameraModule::EcsCamera);
+	const auto camera_entity = world.entity(camera);
 	const auto view = glm::translate(glm::mat4(1.f), -camera_entity.get<GlobalTransform>().translation);
-	const auto view_proj = view * camera_entity.get<Camera>().projection;
+	const auto view_proj = camera_entity.get<Camera>().projection * view;
 
 	const auto& render_pass = camera_entity.get<RenderPass>().render_pass;
 
