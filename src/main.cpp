@@ -119,7 +119,6 @@ void init_2(flecs::world& world, ps::RenderDevice& device, ps::WindowModule& win
 					TRANSPARENT,
 					SDL_GetGPUSwapchainTextureFormat(device.gpu, window_module.main_window)
 				),
-				.clear_color = TRANSPARENT,
 			});
 
 	auto second_camera = world.entity("second_camera")
@@ -131,7 +130,6 @@ void init_2(flecs::world& world, ps::RenderDevice& device, ps::WindowModule& win
 					TRANSPARENT,
 					SDL_GetGPUSwapchainTextureFormat(device.gpu, window_module.main_window)
 				),
-				.clear_color = TRANSPARENT,
 			});
 
 	CameraCompositionGraph graph;

@@ -22,7 +22,7 @@ namespace ps {
 
 		std::variant<std::monostate, flecs::entity_t, std::shared_ptr<Texture>> render_target;
 
-		Color clear_color = BLACK;
+		Color clear_color = TRANSPARENT;
 
 		SDL_GPULoadOp load_op = SDL_GPU_LOADOP_CLEAR;
 	};
