@@ -9,6 +9,7 @@
 #include "ecsModule/common.h"
 #include "ecsModule/utils.h"
 #include "ecsModule/ui_module/module.h"
+#include "ecsModule/windowModule/components.h"
 #include "spdlog/spdlog.h"
 
 void button(flecs::world& world) {
@@ -24,25 +25,21 @@ void button(flecs::world& world) {
 			}
 		});
 
-	const BackgroundColor defaultColor = RED;
-	const BackgroundColor hoverColor = GREEN;
-	const BackgroundColor clickColor = BLUE;
-
 	world.system<Interaction, BackgroundColor>()
 		.with<Button>()
 		.kind(Phases::Update)
 		.each([&](Interaction& interaction, BackgroundColor& color) {
 			switch (interaction) {
 				case Interaction::None: {
-					color = defaultColor;
+					color = RED;
 					break;
 				}
 				case Interaction::Hovered: {
-					color = hoverColor;
+					color = GREEN;
 					break;
 				}
 				case Interaction::Clicked: {
-					color = clickColor;
+					color = BLUE;
 					break;
 				}
 			}
@@ -51,11 +48,7 @@ void button(flecs::world& world) {
 
 void init(flecs::world& world, ps::AssetStorage& storage, ps::RenderDevice& device) {
 	using namespace ps;
-	//auto parent = world.entity("parent").add<ps::Node>();
-
-	world.entity("EcsCamera")
-		.set<Transform>({ .translation = { 0.f, 0.f, 0.f } })
-		.add<Camera>();
+	auto parent = world.entity("parent").add<ps::Node>();
 
 	//world.entity("image")
 	//	.set<ps::Image>({ .texture = storage.load_texture(*device.gpu, "assets/main_menu.jpg") })
@@ -70,7 +63,7 @@ void init(flecs::world& world, ps::AssetStorage& storage, ps::RenderDevice& devi
 	auto text = world.entity("text")
 		.set<Transform>({ .translation = {100.f, 0.f, 0.f } })
 		.set<Text2d>({ "check some check for check" })
-		.set<TextColor>(WHITE)
+		.set<TextColor>(RED)
 		.set<TextFont>({ storage.load_font("assets/FreeSans.ttf", 16) });
 
 	//auto child = world.entity("child").add<ps::Node>().child_of(parent);
@@ -90,22 +83,44 @@ void init(flecs::world& world, ps::AssetStorage& storage, ps::RenderDevice& devi
 	//world.entity("text2")
 	//	.set<ps::Text>({ .string = "check some check for check!", .font = storage.load_font("assets/FreeSans.ttf", 46) });
 	//
-	//auto btn = world.entity("button")
-	//	.child_of(parent)
-	//	.set<ps::Transform>({ .translation = {200.f, 300.f, 0.f } })
-	//	.set<ps::Node>({ .size = { 200, 200 } })
-	//	.add<ps::Button>();
-	//world.entity("button2")
-	//	.child_of(btn)
-	//	.set<ps::Node>({ .size = { 100, 100 } })
-	//	.emplace<ps::BackgroundColor>(1.f, 0.f, 0.f, 1.f)
-	//	.add<ps::Button>()
-	//	.set(ps::FocusStrategy::Block);
+	auto btn = world.entity("button")
+		.child_of(parent)
+		.set<ps::Transform>({ .translation = {200.f, 300.f, 0.f } })
+		.set<ps::Node>({ .size = { 200, 200 } })
+		.set<ps::BackgroundColor>(Color::from_hex("#00FF00"))
+		.add<ps::Button>();
+	world.entity("button2")
+		.child_of(btn)
+		.set<ps::Node>({ .size = { 100, 100 } })
+		.set<ps::BackgroundColor>(RED)
+		.add<ps::Button>()
+		.set(ps::FocusStrategy::Block);
+
+	BackgroundColor color = Color::from_hex("#00FF00");
+
+	auto k = 0;
 }
+
+void init_2(flecs::world& world) {
+	using namespace ps;
+
+	auto window = world.entity("second_window")
+		.set<Window>({ .width = 100, .height = 100 });
+
+	world.entity("main_camera")
+		.set<ps::Transform>({ .translation = { 0.f, 0.f, 0.f } })
+		.set<ps::Camera>({});
+
+	world.entity("second_camera")
+		.set<ps::Transform>({ .translation = { 0.f, 0.f, 0.f } })
+		.set<ps::RenderLayers>({ RenderLayers::layer(2) | RenderLayers::layer(1) })
+		.set<ps::Camera>({ .render_target = window });
+};
 
 int main() {
 	ps::Application::create()
 		.add_module<ps::DefaultModules>()
+		.add_system(ps::Phases::OnStart, &init_2)
 		.add_system(ps::Phases::OnStart, &init)
 		.build_system(&button)
 		//.add_script("assets/scripts/sandbox.flecs")

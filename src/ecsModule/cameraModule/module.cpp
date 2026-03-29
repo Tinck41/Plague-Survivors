@@ -8,6 +8,7 @@
 #include "ecsModule/windowModule/module.h"
 #include "ecsModule/windowModule/components.h"
 #include "ext/matrix_clip_space.hpp"
+#include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 
 using namespace ps;
@@ -24,7 +25,11 @@ CameraModule::CameraModule(flecs::world& world) {
 	world.component<VisibleEntities>()
 		.member<std::vector<flecs::entity>>("entities");
 
+	world.component<RenderLayers>()
+		.member<std::uint32_t>("mask");
+
 	world.component<Camera>()
+		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<VisibleEntities>())
 		.add(flecs::With, world.component<Transform>())
 //		.add(flecs::With, world.component<Velocity>())
@@ -41,19 +46,34 @@ CameraModule::CameraModule(flecs::world& world) {
 		.member<glm::vec2>("min")
 		.member<glm::vec2>("max");
 
-	world.system<Window, Camera>()
-		.kind(Phases::OnStart)
-		.each([](Window& window, Camera& c) {
-			c.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
-			c.viewport = glm::vec2(window.width, window.height);
+	auto main_window_query = world.query_builder<Window>()
+		.with<MainWindow>()
+		.build();
+
+	world.observer<Camera>()
+		.event(flecs::OnAdd)
+		.each([main_window_query](Camera& camera) {
+			if (!std::holds_alternative<std::monostate>(camera.render_target)) {
+				return;
+			}
+
+			main_window_query.each([&](flecs::entity entity, Window& window) {
+				camera.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
+				camera.viewport = glm::vec2(window.width, window.height);
+				camera.render_target = entity;
+			});
 		});
 
-	world.observer<Camera, Window>()
-		.term_at(1).filter()
-		.event(flecs::OnAdd)
-		.each([](Camera& camera, Window& window) {
-			camera.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
-			camera.viewport = glm::vec2(window.width, window.height);
+	world.observer<Camera>()
+		.event(flecs::OnSet)
+		.each([&world, main_window_query](Camera& camera) {
+			if (std::holds_alternative<flecs::entity_t>(camera.render_target)) {
+				auto window = world.entity(std::get<flecs::entity_t>(camera.render_target)).get<Window>();
+
+				camera.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
+				camera.viewport = glm::vec2(window.width, window.height);
+			}
+			// else ???
 		});
 
 	world.observer<Camera>()
@@ -61,8 +81,10 @@ CameraModule::CameraModule(flecs::world& world) {
 		.each([](flecs::iter& it, size_t i, Camera& camera) {
 			const auto eventData = it.param<WindowResize>();
 
-			camera.projection = glm::ortho(0.f, static_cast<float>(eventData->width), static_cast<float>(eventData->height), 0.f, -1.f, 1.f);
-			camera.viewport = glm::vec2(eventData->width, eventData->height);
+			if (std::holds_alternative<flecs::entity_t>(camera.render_target) && std::get<flecs::entity_t>(camera.render_target) == eventData->window_entity) {
+				camera.projection = glm::ortho(0.f, static_cast<float>(eventData->width), static_cast<float>(eventData->height), 0.f, -1.f, 1.f);
+				camera.viewport = glm::vec2(eventData->width, eventData->height);
+			}
 		});
 
 	world.system<Visible2d>()
@@ -71,11 +93,11 @@ CameraModule::CameraModule(flecs::world& world) {
 			visible.value = false;
 		});
 
-	auto visible_query = world.query<Aabb, Visible2d>();
+	auto visible_query = world.query<Aabb, Visible2d, RenderLayers>();
 
-	world.system<Camera, GlobalTransform, VisibleEntities>()
+	world.system<Camera, GlobalTransform, RenderLayers&, VisibleEntities>()
 		.kind(Phases::PostUpdate)
-		.each([visible_query](flecs::entity entity, Camera& camera, GlobalTransform& transform, VisibleEntities& visible_entities) {
+		.each([visible_query](flecs::entity entity, Camera& camera, GlobalTransform& transform, RenderLayers& camera_render_layers, VisibleEntities& visible_entities) {
 			visible_entities.entities.clear();
 
 			Aabb camera_aabb{
@@ -83,10 +105,12 @@ CameraModule::CameraModule(flecs::world& world) {
 				.max = glm::vec2(transform.translation) + camera.viewport,
 			};
 
-			visible_query.each([&](flecs::entity entity, Aabb& other_aabb, Visible2d& visible) {
-				visible.value = camera_aabb.is_intersect(other_aabb);
+			visible_query.each([&](flecs::entity entity, Aabb& other_aabb, Visible2d& visible, RenderLayers& render_layers) {
+				if (!visible.value) {
+					visible.value = camera_aabb.is_intersect(other_aabb);
+				}
 
-				if (visible.value) {
+				if (camera_aabb.is_intersect(other_aabb) && camera_render_layers.intersects(render_layers)) {
 					visible_entities.entities.emplace(entity);
 				}
 			});

@@ -169,9 +169,9 @@ InputModule::InputModule(flecs::world& world) {
 
 	world.set<Input>({});
 
-	world.system<Window, Input, AppState>()
+	world.system<Input, AppState>()
 		.kind(Phases::HandleInput)
-		.each([world](Window& window, Input& input, AppState& app_state) {
+		.each([&world](Input& input, AppState& app_state) {
 			for (auto& [key, state] : input.keys) {
 				state.pressed = false;
 				state.released = false;
@@ -186,24 +186,46 @@ InputModule::InputModule(flecs::world& world) {
 			SDL_Event event;
 
 			while (SDL_PollEvent(&event)) {
+				if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+					world.each([&](Window& window) {
+						if (event.window.windowID != SDL_GetWindowID(window.handle)) {
+							return;
+						}
+
+						window.has_focus = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+					});
+				}
+
 				if (event.type == SDL_EVENT_QUIT) {
 					app_state = AppState::Exit;
 				}
 				else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-					WindowResize event;
+					world.each([&](flecs::entity window_entity, Window& window) {
+						if (event.window.windowID != SDL_GetWindowID(window.handle)) {
+							return;
+						}
 
-					SDL_GetWindowSize(window.handle, &event.width, &event.height);
+						WindowResize event{ 
+							.window_entity = window_entity
+						};
 
-					world.each<Camera>([&](flecs::entity entity, Camera& camera) {
-						world.event<WindowResize>()
-							.id<Camera>()
-							.entity(entity)
-							.ctx(event)
-							.emit();
+						SDL_GetWindowSize(window.handle, &event.width, &event.height);
+
+						world.each<Camera>([&](flecs::entity entity, Camera& camera) {
+							if (std::holds_alternative<flecs::entity_t>(camera.render_target) && std::get<flecs::entity_t>(camera.render_target) != window_entity) {
+								return;
+							}
+
+							world.event<WindowResize>()
+								.id<Camera>()
+								.entity(entity)
+								.ctx(event)
+								.emit();
+						});
+
+						window.width = event.width;
+						window.height = event.height;
 					});
-
-					window.width = event.width;
-					window.height = event.height;
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {
 					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = !input.keys[sdl_key_to_ps_key(event.key.scancode)].remain;

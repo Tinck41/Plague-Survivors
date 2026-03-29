@@ -7,6 +7,7 @@
 #include "texture.h"
 
 #include <unordered_set>
+#include <variant>
 #include <vector>
 #include <memory>
 
@@ -16,7 +17,7 @@ namespace ps {
 		glm::vec2 offset;
 		glm::mat4 projection;
 
-		std::shared_ptr<Texture> render_texture;
+		std::variant<std::monostate, flecs::entity_t, std::shared_ptr<Texture>> render_target;
 
 		Color clear_color = BLACK;
 
@@ -24,6 +25,8 @@ namespace ps {
 	};
 
 	struct WindowResize {
+		flecs::entity_t window_entity;
+
 		int width;
 		int height;
 	};
@@ -51,6 +54,25 @@ namespace ps {
 				other.max.y > min.y &&
 				other.min.y < max.y;
 		}
+	};
+
+	struct RenderLayers {
+		std::uint32_t mask = 1u << 1;
+
+		static std::uint32_t layer(std::uint32_t layer) {
+			return 1u << layer;
+		};
+
+		RenderLayers operator|(const RenderLayers& other) const {
+			return { mask | other.mask };
+		}
+
+		bool intersects(const RenderLayers& other) const {
+			return (mask & other.mask) != 0;
+		}
+
+		constexpr static std::uint32_t DEFAULT = 1u << 1;
+		constexpr static std::uint32_t UI = 1u << 2;
 	};
 
 	struct CameraModule {

@@ -33,12 +33,10 @@ namespace ps {
 	struct RenderCommands {
 		SDL_GPUCommandBuffer* cmd_buffer;
 		SDL_GPURenderPass* render_pass;
-		SDL_GPUTexture* swapchain_texture;
 	};
 
 	struct RenderPass {
 		SDL_GPURenderPass* render_pass;
-		SDL_GPUTexture* target;
 	};
 
 	struct WhiteTexture {

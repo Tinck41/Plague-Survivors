@@ -69,8 +69,6 @@ namespace ps {
 	struct SpritePipeline {
 		SDL_GPUGraphicsPipeline* pipeline;
 		SDL_GPUSampler* sampler;
-
-		std::shared_ptr<Texture> white_texture;
 	};
 
 	struct SpriteStorage {

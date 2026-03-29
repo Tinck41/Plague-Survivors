@@ -31,15 +31,19 @@ UiModule::UiModule(flecs::world& world) {
 	world.component<CustomNodeIndex>()
 		.member<size_t>("index");
 
-	world.component<BackgroundColor>()
+	world.component<Color>()
 		.member<std::uint8_t>("r")
 		.member<std::uint8_t>("g")
 		.member<std::uint8_t>("b")
 		.member<std::uint8_t>("a");
 
+	world.component<BackgroundColor>()
+		.is_a<Color>();
+
 	world.component<Node>()
 		.member<glm::vec2>("size")
 		.member<size_t>("stack_index")
+		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<Aabb>())
 		.add(flecs::With, world.component<Visible2d>())
 		.add(flecs::With, world.component<Transform>())
@@ -104,6 +108,13 @@ UiModule::UiModule(flecs::world& world) {
 		.with(flecs::ChildOf, flecs::Wildcard)
 		.each([&world](flecs::entity child, Node& node) {
 			world.add<UiTreeChanged>();
+		});
+
+	world.observer<RenderLayers, Node>()
+		.term_at(1).filter()
+		.event(flecs::OnAdd)
+		.each([&world](RenderLayers& render_layers, Node& node) {
+			render_layers.mask = RenderLayers::UI;
 		});
 
 	world.system<NodeVector>()

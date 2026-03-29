@@ -13,6 +13,7 @@
 #include "ext/matrix_transform.hpp"
 #include "font.h"
 #include "utils/sdl.h"
+#include "utils/visit.h"
 #include <algorithm>
 #include <ranges>
 
@@ -88,10 +89,24 @@ void draw(flecs::entity_t camera, flecs::entity_t entity, const flecs::world& wo
 	const auto& pipeline = world.get<UiPipeline>();
 	const auto& storage = world.get<UiStorage>();
 	const auto& render_commands = world.get<RenderCommands>();
-	const auto& window = world.get<Window>();
-	const auto& render_pass = world.entity(camera).get<RenderPass>().render_pass;
+	const auto camera_entity = world.entity(camera);
+	const auto& render_pass = camera_entity.get<RenderPass>().render_pass;
+	const auto& camera_data = camera_entity.get<Camera>();
 
-	const auto proj = glm::ortho(0.f, float(window.width), float(window.height), 0.f);
+	const auto proj = visit(camera_data.render_target, visitors{
+		[&world](flecs::entity_t window) {
+			const auto& window_data = world.entity(window).get<Window>();
+
+			return glm::ortho(0.f, float(window_data.width), float(window_data.height), 0.f);
+		},
+		[](const std::shared_ptr<Texture>& texture) {
+			const auto texture_size = texture->get_size();
+			return glm::ortho(0.f, texture_size.x, texture_size.y, 0.f);
+		},
+		[](auto&&) {
+			return glm::ortho(0.f, 0.f, 0.f, 0.f);
+		}
+	});
 
 	const auto& batch = batches.at(camera).at(entity);
 
@@ -113,8 +128,11 @@ void draw(flecs::entity_t camera, flecs::entity_t entity, const flecs::world& wo
 	SDL_BindGPUFragmentSamplers(render_pass, 0, &texture_sampler_binding, 1);
 
 	SDL_PushGPUVertexUniformData(render_commands.cmd_buffer, 0, &proj, sizeof(glm::mat4));
+	SDL_PushGPUDebugGroup(render_commands.cmd_buffer, "draw_ui_node");
 
 	SDL_DrawGPUIndexedPrimitives(render_pass, 6 * batch.size, 1, batch.first_index, 0, 0);
+
+	SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
 }
 
 void draw_ui_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::world& world) {
@@ -127,8 +145,9 @@ void draw_ui_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::w
 	const auto& pipeline = world.get<UiTextPipeline>();
 	const auto& storage = world.get<UiTextStorage>();
 	const auto& commands = world.get<RenderCommands>();
-	const auto& window = world.get<Window>();
-	const auto& render_pass = world.entity(camera).get<RenderPass>().render_pass;
+	const auto camera_entity = world.entity(camera);
+	const auto& camera_data = camera_entity.get<Camera>();
+	const auto& render_pass = camera_entity.get<RenderPass>().render_pass;
 
 	auto& batch_seq = batches.at(camera).at(entity);
 
@@ -139,7 +158,20 @@ void draw_ui_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::w
 		.buffer = storage.index_buffer,
 	};
 
-	const auto proj = glm::ortho(0.f, float(window.width), float(window.height), 0.f);
+	const auto proj = visit(camera_data.render_target, visitors{
+		[&world](flecs::entity_t window) {
+			const auto& window_data = world.entity(window).get<Window>();
+
+			return glm::ortho(0.f, float(window_data.width), float(window_data.height), 0.f);
+		},
+		[](const std::shared_ptr<Texture>& texture) {
+			const auto texture_size = texture->get_size();
+			return glm::ortho(0.f, texture_size.x, texture_size.y, 0.f);
+		},
+		[](auto&&) {
+			return glm::ortho(0.f, 0.f, 0.f, 0.f);
+		}
+	});
 
 	SDL_BindGPUGraphicsPipeline(render_pass, pipeline.pipeline);
 	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_bindings, 1);
@@ -165,7 +197,6 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.import<TransformModule>();
 	world.import<RenderModule>();
 	world.import<CameraModule>();
-	world.import<WindowModule>();
 	world.import<MeshModule>();
 	world.import<TextModule>();
 
@@ -203,14 +234,14 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 		});
 
 
-	world.system<Window, RenderDevice, UiPipeline>("create ui pipeline")
+	world.system<RenderDevice, UiPipeline>("create ui pipeline")
 		.kind(Phases::OnStart)
-		.each([](Window& window, RenderDevice& device, UiPipeline& pipeline) {
+		.each([&world](RenderDevice& device, UiPipeline& pipeline) {
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/ui.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, "assets/shaders/out/ui.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description{
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, world.get<WindowModule>().main_window),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -279,16 +310,16 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 			SDL_ReleaseGPUShader(device.gpu, frag_shader);
 		});
 
-	world.system<Window, RenderDevice, UiTextPipeline>("create ui text pipeline")
+	world.system<RenderDevice, UiTextPipeline>("create ui text pipeline")
 		.kind(Phases::OnStart)
-		.each([](Window& window, RenderDevice& device, UiTextPipeline& pipeline) {
+		.each([&world](RenderDevice& device, UiTextPipeline& pipeline) {
 			constexpr bool use_sdf = true;
 
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/text.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, use_sdf ? "assets/shaders/out/text_sdf.frag.msl" : "assets/shaders/out/text.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description = {
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, world.get<WindowModule>().main_window),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -533,6 +564,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 		});
 
 	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedUiTextItems>("collect text nodes")
+		.with<Camera>()
 		.kind(Phases::CollectRenderData)
 		.each([transparent_ui, text_query](flecs::entity camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedUiTextItems& text_items) {
 			text_query.each([&](flecs::entity entity, Node& node, Text& text, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {

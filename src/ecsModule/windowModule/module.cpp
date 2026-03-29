@@ -14,24 +14,25 @@ WindowModule::WindowModule(flecs::world& world) {
 	world.component<Window>()
 		.member<int>("width")
 		.member<int>("height")
-		.add(flecs::Singleton);
+		.member<bool>("has_focus");
 
-	world.system<Window>()
-		.kind(Phases::OnStart)
-		.each([](Window& window) {
-			window.handle = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
-
-			window.width = WINDOW_WIDTH;
-			window.height = WINDOW_HEIGHT;
-		});
+	world.component<MainWindow>();
 
 	world.observer<Window>()
 		.event(flecs::OnSet)
 		.each([](Window& window) {
-			if (window.handle) {
-				SDL_SetWindowSize(window.handle, window.width, window.height);
+			if (!window.handle) {
+				window.handle = SDL_CreateWindow("Plague: Survivors", window.width, window.height, SDL_WINDOW_RESIZABLE);
 			}
 		});
 
-	world.add<Window>();
+	main_window = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
+
+	world.entity("main_window")
+		.add<MainWindow>()
+		.set<Window>({
+			.width = WINDOW_WIDTH,
+			.height = WINDOW_HEIGHT,
+			.handle = main_window,
+		});
 }

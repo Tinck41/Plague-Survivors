@@ -1,12 +1,11 @@
 #include "module.h"
 
 #include "ecsModule/common.h"
-#include "ecsModule/windowModule/module.h"
-#include "ecsModule/windowModule/components.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/assetModule/module.h"
 #include "ecsModule/cameraModule/module.h"
+#include "ecsModule/windowModule/module.h"
 #include "ecsModule/meshModule/module.h"
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
@@ -62,7 +61,6 @@ void draw_sprite(flecs::entity_t camera_entity, flecs::entity_t entity, const fl
 SpriteModule::SpriteModule(flecs::world& world) {
 	world.module<SpriteModule>();
 
-	world.import<WindowModule>();
 	world.import<RenderModule>();
 	world.import<TransformModule>();
 	world.import<CameraModule>();
@@ -73,6 +71,7 @@ SpriteModule::SpriteModule(flecs::world& world) {
 	world.component<CameraCollectedSpriteItems>().add(flecs::Singleton);
 	world.component<Sprite>()
 		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<Visible2d>())
 		.add(flecs::With, world.component<Aabb>());
 
@@ -108,14 +107,14 @@ SpriteModule::SpriteModule(flecs::world& world) {
 			sprite.texture = white_texture.texture;
 		});
 
-	world.system<Window, RenderDevice, SpritePipeline>("create sprite pipeline")
+	world.system<RenderDevice, SpritePipeline>("create sprite pipeline")
 		.kind(Phases::OnStart)
-		.each([](Window& window, RenderDevice& device, SpritePipeline& pipeline) {
+		.each([&world](RenderDevice& device, SpritePipeline& pipeline) {
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/sprite_batch.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, "assets/shaders/out/sprite_batch.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description{
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, world.get<WindowModule>().main_window),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -182,56 +181,10 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				}
 			};
 
-			SDL_GPUTextureCreateInfo texture_create_info{
-				.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-				.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
-				.width = 1,
-				.height = 1,
-				.layer_count_or_depth = 1,
-				.num_levels = 1,
-			};
-
-			auto texture = SDL_CreateGPUTexture(device.gpu, &texture_create_info);
-
-			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
-				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-				.size = 4,
-			};
-
-			auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
-			auto tex_transfer_mem = SDL_MapGPUTransferBuffer(device.gpu, tex_transfer_buf, false);
-
-			uint32_t white_pixel = 0xffffffff;
-			std::memcpy(tex_transfer_mem, &white_pixel, 4);
-
-			SDL_UnmapGPUTransferBuffer(device.gpu, tex_transfer_buf);
-
-			auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(device.gpu);
-			auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
-
-			SDL_GPUTextureTransferInfo texture_transfer_info{
-				.transfer_buffer = tex_transfer_buf,
-			};
-			SDL_GPUTextureRegion texture_region{
-				.texture = texture,
-				.w = 1,
-				.h = 1,
-				.d = 1,
-			};
-
-			SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
-
-			SDL_EndGPUCopyPass(copy_pass);
-
-			assert(SDL_SubmitGPUCommandBuffer(copy_cmd_buf) && SDL_GetError());
-
-			SDL_ReleaseGPUTransferBuffer(device.gpu, tex_transfer_buf);
-
 			SDL_GPUSamplerCreateInfo sampler_create_info{};
 
 			pipeline.sampler = SDL_CreateGPUSampler(device.gpu, &sampler_create_info);
 			pipeline.pipeline = SDL_CreateGPUGraphicsPipeline(device.gpu, &pipeline_create_info);
-			pipeline.white_texture = std::make_shared<Texture>(device.gpu, texture, glm::vec2(1.f, 1.f));
 
 			SDL_ReleaseGPUShader(device.gpu, vert_shader);
 			SDL_ReleaseGPUShader(device.gpu, frag_shader);

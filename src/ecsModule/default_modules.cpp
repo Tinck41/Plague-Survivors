@@ -11,6 +11,7 @@
 #include "inputModule/module.h"
 #include "ui_module/module.h"
 #include "ui_render_module/module.h"
+#include "windowModule/module.h"
 
 using namespace ps;
 
@@ -21,6 +22,7 @@ DefaultModules::DefaultModules(flecs::world& world) {
 
 	world.import<AssetModule>();
 	world.import<TransformModule>();
+	world.import<WindowModule>();
 	world.import<CameraModule>();
 	world.import<RenderModule>();
 	world.import<SpriteModule>();

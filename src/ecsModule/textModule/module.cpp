@@ -1,8 +1,5 @@
 #include "module.h"
 
-#include "ecsModule/windowModule/module.h"
-#include "ecsModule/windowModule/components.h"
-#include "ecsModule/assetModule/module.h"
 #include "ecsModule/common.h"
 #include "SDL3_ttf/SDL_ttf.h"
 #include "ecsModule/renderModule/module.h"
@@ -10,7 +7,9 @@
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/meshModule/module.h"
 #include "ecsModule/cameraModule/module.h"
+#include "ecsModule/windowModule/module.h"
 #include "ext/matrix_transform.hpp"
+#include "font.h"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
 #include <algorithm>
@@ -66,7 +65,6 @@ void draw_text(flecs::entity_t camera, flecs::entity_t entity, const flecs::worl
 TextModule::TextModule(flecs::world& world) {
 	world.module<TextModule>();
 
-	world.import<WindowModule>();
 	world.import<RenderModule>();
 	world.import<CameraModule>();
 	world.import<SpriteModule>();
@@ -82,7 +80,6 @@ TextModule::TextModule(flecs::world& world) {
 		.member<int>("y");
 
 	world.component<TextFont>();
-	world.component<TextColor>();
 	world.component<TextData>()
 		.member<glm::ivec2>("size");
 
@@ -97,6 +94,7 @@ TextModule::TextModule(flecs::world& world) {
 
 	world.component<Text2d>()
 		.is_a<std::string>()
+		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<Aabb>())
 		.add(flecs::With, world.component<Visible2d>())
 		.add(flecs::With, world.component<TextData>())
@@ -104,16 +102,16 @@ TextModule::TextModule(flecs::world& world) {
 		.add(flecs::With, world.component<TextColor>())
 		.add(flecs::With, world.component<Transform>());
 
-	world.system<Window, RenderDevice, TextPipeline>()
+	world.system<RenderDevice, TextPipeline>()
 		.kind(Phases::OnStart)
-		.each([](Window& window, RenderDevice& device, TextPipeline& pipeline) {
+		.each([&world](RenderDevice& device, TextPipeline& pipeline) {
 			constexpr bool use_sdf = true;
 
 			auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/text.vert.msl", 1);
 			auto frag_shader = load_shader(*device.gpu, use_sdf ? "assets/shaders/out/text_sdf.frag.msl" : "assets/shaders/out/text.frag.msl", 0, 1);
 
 			SDL_GPUColorTargetDescription color_target_description = {
-				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window.handle),
+				.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, world.get<WindowModule>().main_window),
 				.blend_state = {
 					.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 					.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,

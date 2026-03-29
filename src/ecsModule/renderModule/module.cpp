@@ -12,6 +12,7 @@
 #include "ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/sdl.h"
+#include "utils/visit.h"
 #include <algorithm>
 #include <ranges>
 
@@ -52,15 +53,19 @@ RenderModule::RenderModule(flecs::world& world) {
 			// TODO
 		});
 
-	world.system<Window, RenderDevice>()
-		.kind(Phases::OnStart)
+	world.observer<RenderDevice>()
+		.event(flecs::OnSet)
+		.each([&world](RenderDevice& render_device) {
+			world.each([&render_device](Window& window) {
+				assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
+			});
+		});
+
+	// TODO: sometimes overlap with observer from WindowModule
+	world.observer<Window, RenderDevice>()
+		.event(flecs::OnSet)
 		.each([](Window& window, RenderDevice& render_device) {
-			auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
-
-			assert(gpu && SDL_GetError());
-			assert(SDL_ClaimWindowForGPUDevice(gpu, window.handle) && SDL_GetError());
-
-			render_device.gpu = gpu;
+			assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
 		});
 
 	world.system<RenderDevice, WhiteTexture>()
@@ -134,7 +139,7 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.system<Window, RenderCommands>()
 		.kind(Phases::PreRender)
 		.each([&world](Window& window, RenderCommands& render_commands) {
-			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &render_commands.swapchain_texture, nullptr, nullptr) && SDL_GetError());
+			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &window.swapchain_texture, nullptr, nullptr) && SDL_GetError());
 		});
 
 	world.system<CameraRenderPhaseItems>("sort render data")
@@ -152,15 +157,29 @@ RenderModule::RenderModule(flecs::world& world) {
 			}
 		});
 
-	world.system<Camera, RenderPass, Window, RenderDevice, RenderCommands, CameraRenderPhaseItems, RenderStats>()
+	world.system<RenderStats>()
+		.kind(Phases::PreRender)
+		.each([](RenderStats& stats) {
+			stats.draw_calls = 0;
+		});
+
+	world.system<Camera, RenderPass, RenderDevice, RenderCommands, CameraRenderPhaseItems, RenderStats>()
 		.kind(Phases::Render)
-		.each([&world](flecs::entity camera_entity, Camera& camera, RenderPass& pass, Window& window, RenderDevice& device, RenderCommands& render_commands, CameraRenderPhaseItems& phase_items, RenderStats& stats) {
-			pass.target = camera.render_texture
-				? &camera.render_texture->get_gpu_texture()
-				: render_commands.swapchain_texture;
+		.each([&world](flecs::entity camera_entity, Camera& camera, RenderPass& pass, RenderDevice& device, RenderCommands& render_commands, CameraRenderPhaseItems& phase_items, RenderStats& stats) {
+			auto render_texture = visit(camera.render_target, visitors{
+				[&world](flecs::entity_t window_entity) {
+					return world.entity(window_entity).get<Window>().swapchain_texture;
+				},
+				[](const std::shared_ptr<Texture>& texture) {
+					return &texture->get_gpu_texture();
+				},
+				[](auto&&) -> SDL_GPUTexture* {
+					throw std::runtime_error("invalid render target");
+				}
+			});
 
 			auto color_target = SDL_GPUColorTargetInfo{
-				.texture = pass.target,
+				.texture = render_texture,
 				.clear_color = camera.clear_color,
 				.load_op = camera.load_op,
 				.store_op = SDL_GPU_STOREOP_STORE
@@ -169,8 +188,6 @@ RenderModule::RenderModule(flecs::world& world) {
 			pass.render_pass = SDL_BeginGPURenderPass(render_commands.cmd_buffer, &color_target, 1, nullptr);
 
 			SDL_PushGPUDebugGroup(render_commands.cmd_buffer, std::format("camera: {}", camera_entity.name() ? std::string(camera_entity.name()) : std::to_string(camera_entity.id())).c_str());
-
-			stats.draw_calls = 0;
 
 			for (const auto& phase : render_phases_order) {
 				if (!phase_items.contains(camera_entity) || !phase_items.at(camera_entity).contains(phase) || phase_items.at(camera_entity).at(phase).empty()) {
@@ -203,7 +220,12 @@ RenderModule::RenderModule(flecs::world& world) {
 			assert(SDL_SubmitGPUCommandBuffer(render_commands.cmd_buffer) && SDL_GetError());
 		});
 
-	world.add<RenderDevice>();
+	auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
+
+	assert(gpu && SDL_GetError());
+
+	world.set<RenderDevice>({ gpu });
+
 	world.add<CopyCommands>();
 	world.add<RenderCommands>();
 	world.add<WhiteTexture>();
