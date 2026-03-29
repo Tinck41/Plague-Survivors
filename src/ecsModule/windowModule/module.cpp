@@ -18,14 +18,6 @@ WindowModule::WindowModule(flecs::world& world) {
 
 	world.component<MainWindow>();
 
-	world.observer<Window>()
-		.event(flecs::OnSet)
-		.each([](Window& window) {
-			if (!window.handle) {
-				window.handle = SDL_CreateWindow("Plague: Survivors", window.width, window.height, SDL_WINDOW_BORDERLESS);
-			}
-		});
-
 	main_window = SDL_CreateWindow("Plague: Survivors", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
 
 	world.entity("main_window")

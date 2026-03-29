@@ -90,54 +90,9 @@ RenderModule::RenderModule(flecs::world& world) {
 				}
 			};
 
-			std::array<SDL_GPUVertexAttribute, 6> vertex_attrs{
-				SDL_GPUVertexAttribute{
-					.location = 0,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-					.offset = offsetof(SpriteInstance, translation),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 1,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-					.offset = offsetof(SpriteInstance, rotation),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 2,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-					.offset = offsetof(SpriteInstance, scale),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 3,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-					.offset = offsetof(SpriteInstance, color),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 4,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-					.offset = offsetof(SpriteInstance, uv),
-				},
-				SDL_GPUVertexAttribute{
-					.location = 5,
-					.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-					.offset = offsetof(SpriteInstance, size),
-				},
-			};
-
-			SDL_GPUVertexBufferDescription vertex_buffer_description{
-				.slot = 0,
-				.pitch = sizeof(SpriteInstance),
-				.input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
-			};
-
 			SDL_GPUGraphicsPipelineCreateInfo pipeline_create_info{
 				.vertex_shader = vert_shader,
 				.fragment_shader = frag_shader,
-				.vertex_input_state = {
-					//.vertex_buffer_descriptions = &vertex_buffer_description,
-					//.num_vertex_buffers = 1,
-					//.vertex_attributes = vertex_attrs.data(),
-					//.num_vertex_attributes = vertex_attrs.size(),
-				},
 				.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
 				.target_info = {
 					.color_target_descriptions = &color_target_description,
@@ -181,11 +136,10 @@ RenderModule::RenderModule(flecs::world& world) {
 		});
 
 	world.system<Window, RenderDevice, RenderCommands>()
-		.with<MainWindow>()
 		.kind(Phases::Clear)
-		.each([](Window& main_window, RenderDevice& device, RenderCommands& render_commands) {
+		.each([](Window& window, RenderDevice& device, RenderCommands& render_commands) {
 			auto color_target = SDL_GPUColorTargetInfo{
-				.texture = main_window.swapchain_texture,
+				.texture = window.swapchain_texture,
 				.clear_color = BLACK,
 				.load_op = SDL_GPU_LOADOP_CLEAR,
 				.store_op = SDL_GPU_STOREOP_STORE
