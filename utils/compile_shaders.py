@@ -2,6 +2,9 @@ import os
 import subprocess
 
 def compile():
+	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/camera_composition.vert.hlsl', '-o', 'assets/shaders/out/camera_composition.vert.msl'])
+	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/camera_composition.frag.hlsl', '-o', 'assets/shaders/out/camera_composition.frag.msl'])
+
 	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/ui.vert.hlsl', '-o', 'assets/shaders/out/ui.vert.msl'])
 	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/ui.frag.hlsl', '-o', 'assets/shaders/out/ui.frag.msl'])
 

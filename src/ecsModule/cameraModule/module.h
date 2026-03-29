@@ -1,6 +1,7 @@
 #pragma once
 
 #include "color.h"
+#include "dag.h"
 #include "flecs.h"
 #include "vec2.hpp"
 #include "mat4x4.hpp"
@@ -12,6 +13,8 @@
 #include <memory>
 
 namespace ps {
+	using CameraCompositionGraph = Dag<flecs::entity>;
+
 	struct Camera {
 		glm::vec2 viewport;
 		glm::vec2 offset;

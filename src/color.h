@@ -27,9 +27,10 @@ namespace ps {
 		std::uint8_t a = 255;
 	};
 
-#define BLACK Color::from_uint(0, 0, 0)
-#define WHITE Color::from_uint(255, 255, 255)
-#define RED   Color::from_uint(255, 0, 0)
-#define GREEN Color::from_uint(0, 255, 0)
-#define BLUE  Color::from_uint(0, 0, 255)
+#define TRANSPARENT Color::from_uint(0, 0, 0, 0)
+#define BLACK       Color::from_uint(0, 0, 0)
+#define WHITE       Color::from_uint(255, 255, 255)
+#define RED         Color::from_uint(255, 0, 0)
+#define GREEN       Color::from_uint(0, 255, 0)
+#define BLUE        Color::from_uint(0, 0, 255)
 }

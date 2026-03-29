@@ -56,6 +56,11 @@ namespace ps {
 	using RenderPhaseItems = std::unordered_map<flecs::entity_t, std::vector<RenderPhase>>;
 	using CameraRenderPhaseItems = std::unordered_map<flecs::entity_t, RenderPhaseItems>;
 
+	struct CameraCompositionPipeline {
+		SDL_GPUGraphicsPipeline* pipeline;
+		SDL_GPUSampler* sampler;
+	};
+
 	struct BindData {
 		std::function<void(const flecs::world&)> function;
 	};

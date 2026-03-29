@@ -22,6 +22,10 @@ CameraModule::CameraModule(flecs::world& world) {
 	//world.import<TimeModule>();
 	//world.import<RenderModule>();
 
+	// NOTE: requires RednerModule::CameraCompositionPipeline
+	world.component<CameraCompositionGraph>()
+		.add(flecs::Singleton);
+
 	world.component<VisibleEntities>()
 		.member<std::vector<flecs::entity>>("entities");
 
@@ -73,7 +77,11 @@ CameraModule::CameraModule(flecs::world& world) {
 				camera.projection = glm::ortho(0.f, static_cast<float>(window.width), static_cast<float>(window.height), 0.f, -1.f, 1.f);
 				camera.viewport = glm::vec2(window.width, window.height);
 			}
-			// else ???
+			else if (std::holds_alternative<std::shared_ptr<Texture>>(camera.render_target)) {
+				const auto texture = std::get<std::shared_ptr<Texture>>(camera.render_target);
+
+				camera.viewport = texture->get_size();
+			}
 		});
 
 	world.observer<Camera>()

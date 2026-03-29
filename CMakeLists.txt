@@ -36,6 +36,7 @@ add_executable(${PROJECT_NAME}
 	src/texture.cpp
 	src/font.h
 	src/font.cpp
+	src/dag.h
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
 	src/ecsModule/ui_module/module.h

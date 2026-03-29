@@ -22,7 +22,7 @@ WindowModule::WindowModule(flecs::world& world) {
 		.event(flecs::OnSet)
 		.each([](Window& window) {
 			if (!window.handle) {
-				window.handle = SDL_CreateWindow("Plague: Survivors", window.width, window.height, SDL_WINDOW_RESIZABLE);
+				window.handle = SDL_CreateWindow("Plague: Survivors", window.width, window.height, SDL_WINDOW_BORDERLESS);
 			}
 		});
 
