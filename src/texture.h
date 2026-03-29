@@ -1,12 +1,14 @@
 #pragma once
 
 #include "SDL3/SDL.h"
+#include "color.h"
 #include "vec2.hpp"
 
 namespace ps {
 	class Texture {
 	public:
 		Texture(SDL_GPUDevice* gpu, SDL_GPUTexture* texture, const glm::vec2& size);
+		Texture(SDL_GPUDevice* gpu, const glm::uvec2& size, Color color = WHITE);
 		~Texture();
 
 		SDL_GPUTexture& get_gpu_texture() const;

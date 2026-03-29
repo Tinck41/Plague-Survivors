@@ -71,51 +71,7 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.system<RenderDevice, WhiteTexture>()
 		.kind(Phases::OnStart)
 		.each([](RenderDevice& render_device, WhiteTexture& white_texture) {
-			auto texture_create_info = SDL_GPUTextureCreateInfo{
-				.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-				.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
-				.width = 1,
-				.height = 1,
-				.layer_count_or_depth = 1,
-				.num_levels = 1,
-			};
-
-			auto texture = SDL_CreateGPUTexture(render_device.gpu, &texture_create_info);
-
-			SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
-				.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-				.size = 4,
-			};
-			auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(render_device.gpu, &transfer_buffer_create_info);
-			auto tex_transfer_mem = SDL_MapGPUTransferBuffer(render_device.gpu, tex_transfer_buf, false);
-
-			uint32_t white_pixel = 0xffffffff;
-			std::memcpy(tex_transfer_mem, &white_pixel, 4);
-
-			SDL_UnmapGPUTransferBuffer(render_device.gpu, tex_transfer_buf);
-
-			auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(render_device.gpu);
-			auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
-
-			SDL_GPUTextureTransferInfo texture_transfer_info{
-				.transfer_buffer = tex_transfer_buf,
-			};
-			SDL_GPUTextureRegion texture_region{
-				.texture = texture,
-				.w = 1,
-				.h = 1,
-				.d = 1,
-			};
-
-			SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
-
-			SDL_EndGPUCopyPass(copy_pass);
-
-			assert(SDL_SubmitGPUCommandBuffer(copy_cmd_buf) && SDL_GetError());
-
-			SDL_ReleaseGPUTransferBuffer(render_device.gpu, tex_transfer_buf);
-
-			white_texture.texture = std::make_shared<Texture>(render_device.gpu, texture, glm::vec2{ 1.f, 1.f });
+			white_texture.texture = std::make_shared<Texture>(render_device.gpu, glm::vec2{ 1.f, 1.f }, WHITE);
 		});
 
 	world.system<RenderDevice, CopyCommands>()
