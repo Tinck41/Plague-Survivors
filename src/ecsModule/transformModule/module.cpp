@@ -10,14 +10,6 @@ TransformModule::TransformModule(flecs::world& world) {
 	world.module<TransformModule>();
 
 	world.component<Dirty>();
-	world.component<glm::vec2>()
-		.member<float>("x")
-		.member<float>("y");
-
-	world.component<glm::vec3>()
-		.member<float>("x")
-		.member<float>("y")
-		.member<float>("z");
 
 	world.component<Transform>()
 		.member<glm::vec3>("translation")

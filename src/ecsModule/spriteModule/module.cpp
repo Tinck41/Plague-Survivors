@@ -3,14 +3,10 @@
 #include "ecsModule/common.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
-#include "ecsModule/assetModule/module.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/windowModule/module.h"
-#include "ecsModule/meshModule/module.h"
 #include "ext/matrix_transform.hpp"
-#include "spdlog/spdlog.h"
 #include "utils/sdl.h"
-#include "utils/visit.h"
 
 #include <ranges>
 
@@ -75,26 +71,10 @@ SpriteModule::SpriteModule(flecs::world& world) {
 		.add(flecs::With, world.component<Visible2d>())
 		.add(flecs::With, world.component<Aabb>());
 
-	world.component<std::string>()
-		.opaque(flecs::String)
-			.serialize([](const flecs::serializer *s, const std::string *data) {
-				const char *str = data->c_str();
-				return s->value(flecs::String, &str);
-			})
-			.assign_string([](std::string* data, const char *value) {
-				*data = value;
-			});
-
-	world.component<SDL_FColor>()
-		.member<float>("r")
-		.member<float>("g")
-		.member<float>("b")
-		.member<float>("a");
-
 	world.component<Sprite>()
 		.member<glm::vec2>("origin")
 		.member<std::optional<glm::vec2>>("custom_size")
-		.member<SDL_FColor>("color");
+		.member<Color>("color");
 
 	auto transparend_2d = world.component<Transparent2d>()
 		.is_a<RenderPhase>();

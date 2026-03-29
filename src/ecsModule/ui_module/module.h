@@ -3,7 +3,6 @@
 #include "SDL3/SDL.h"
 #include "flecs.h"
 #include "texture.h"
-#include "glm.hpp"
 #include "color.h"
 
 #include <memory>

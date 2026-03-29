@@ -9,7 +9,6 @@
 
 #include <unordered_set>
 #include <variant>
-#include <vector>
 #include <memory>
 
 namespace ps {

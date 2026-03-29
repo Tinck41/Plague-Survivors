@@ -1,20 +1,11 @@
 #pragma once
 
 #include "SDL3/SDL.h"
-#include "ecsModule/common.h"
-#include "mat4x4.hpp"
 #include "flecs.h"
-#include "vec2.hpp"
-#include "vec3.hpp"
-#include "vec4.hpp"
-
 #include "texture.h"
 
-#include <algorithm>
 #include <functional>
-#include <optional>
 #include <vector>
-#include <string>
 #include <memory>
 
 namespace ps {

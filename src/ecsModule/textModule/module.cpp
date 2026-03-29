@@ -9,10 +9,8 @@
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/windowModule/module.h"
 #include "ext/matrix_transform.hpp"
-#include "font.h"
-#include "spdlog/spdlog.h"
 #include "utils/sdl.h"
-#include <algorithm>
+#include "font.h"
 
 using namespace ps;
 
@@ -75,19 +73,9 @@ TextModule::TextModule(flecs::world& world) {
 	world.component<CameraCollectedTextItems>().add(flecs::Singleton);
 	world.component<CameraTextBatches>().add(flecs::Singleton);
 
-	world.component<glm::ivec2>()
-		.member<int>("x")
-		.member<int>("y");
-
 	world.component<TextFont>();
 	world.component<TextData>()
 		.member<glm::ivec2>("size");
-
-	world.component<Color>()
-		.member<std::uint8_t>("r")
-		.member<std::uint8_t>("g")
-		.member<std::uint8_t>("b")
-		.member<std::uint8_t>("a");
 
 	world.component<TextColor>()
 		.is_a<Color>();

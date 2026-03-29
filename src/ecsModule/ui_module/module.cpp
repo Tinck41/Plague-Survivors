@@ -5,12 +5,8 @@
 #include "ecsModule/utils.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/textModule/module.h"
-#include "spdlog/spdlog.h"
 
-#include <algorithm>
-#include <ranges>
 #include <vector>
-#include <map>
 
 using namespace ps;
 
@@ -31,12 +27,6 @@ UiModule::UiModule(flecs::world& world) {
 	world.component<CustomNodeIndex>()
 		.member<size_t>("index");
 
-	world.component<Color>()
-		.member<std::uint8_t>("r")
-		.member<std::uint8_t>("g")
-		.member<std::uint8_t>("b")
-		.member<std::uint8_t>("a");
-
 	world.component<BackgroundColor>()
 		.is_a<Color>();
 
@@ -52,17 +42,6 @@ UiModule::UiModule(flecs::world& world) {
 
 	world.component<Image>()
 		.add(flecs::With, world.component<Node>());
-
-	// TODO: register once
-	world.component<std::string>()
-		.opaque(flecs::String)
-			.serialize([](const flecs::serializer *s, const std::string *data) {
-				const char *str = data->c_str();
-				return s->value(flecs::String, &str);
-			})
-			.assign_string([](std::string* data, const char *value) {
-				*data = value;
-			});
 
 	world.component<Text>()
 		.is_a<std::string>()

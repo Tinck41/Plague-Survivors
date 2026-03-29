@@ -3,11 +3,10 @@
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "flecs.h"
-#include "SDL3/SDL.h"
 #include "vec2.hpp"
-#include "mat4x4.hpp"
 #include "vec4.hpp"
 #include "texture.h"
+#include "color.h"
 
 #include <optional>
 #include <memory>
@@ -19,7 +18,7 @@ namespace ps {
 	struct Sprite {
 		glm::vec2 origin;
 		std::optional<glm::vec2> custom_size;
-		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f };
+		Color color = WHITE;
 		std::shared_ptr<Texture> texture;
 	};
 

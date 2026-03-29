@@ -1,20 +1,16 @@
 #include "module.h"
 
-#include "SDL3_image/SDL_image.h"
-#include "SDL3/SDL.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/common.h"
-#include "ecsModule/spriteModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/windowModule/components.h"
 #include "ecsModule/windowModule/module.h"
-#include "ext/matrix_clip_space.hpp"
-#include "ext/matrix_transform.hpp"
-#include "spdlog/spdlog.h"
 #include "utils/sdl.h"
 #include "utils/visit.h"
+
 #include <algorithm>
 #include <ranges>
+#include <format>
 
 using namespace ps;
 
@@ -38,12 +34,6 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<Camera>()
 		.add(flecs::With, world.component<RenderPass>());
 
-	world.component<SDL_Color>()
-		.member<unsigned char>("r")
-		.member<unsigned char>("g")
-		.member<unsigned char>("b")
-		.member<unsigned char>("a");
-
 	world.component<RenderPhase>();
 	world.component<BindData>();
 	world.component<BindTexture>();
@@ -62,7 +52,6 @@ RenderModule::RenderModule(flecs::world& world) {
 			});
 		});
 
-	// TODO: sometimes overlap with observer from WindowModule
 	world.observer<Window, RenderDevice>()
 		.event(flecs::OnSet)
 		.each([](Window& window, RenderDevice& render_device) {

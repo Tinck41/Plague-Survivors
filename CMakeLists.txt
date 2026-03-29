@@ -60,6 +60,7 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/transformModule/module.h
 	src/ecsModule/transformModule/module.cpp
 	src/ecsModule/windowModule/components.h
+	src/ecsModule/windowModule/components.cpp
 	src/ecsModule/windowModule/module.h
 	src/ecsModule/windowModule/module.cpp
 	#src/ecsModule/sceneModule/module.h

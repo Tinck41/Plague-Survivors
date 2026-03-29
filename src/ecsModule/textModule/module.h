@@ -4,14 +4,12 @@
 #include "SDL3_ttf/SDL_ttf.h"
 #include "ecsModule/transformModule/module.h"
 #include "flecs.h"
-#include "glm.hpp"
 #include "texture.h"
 #include "color.h"
 
 #include <string>
 #include <memory>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 namespace ps {

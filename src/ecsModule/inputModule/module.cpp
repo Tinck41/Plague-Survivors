@@ -7,7 +7,6 @@
 #include "core/app_state.h"
 
 #include "SDL3/SDL.h"
-#include "spdlog/spdlog.h"
 
 using namespace ps;
 

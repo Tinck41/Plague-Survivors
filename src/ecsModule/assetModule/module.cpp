@@ -24,57 +24,17 @@ std::shared_ptr<Texture> AssetStorage::load_texture(SDL_GPUDevice& gpu, const st
 	}
 
 	if (!textures.contains(path)) {
-		// TODO: add IMG_LoadGPUTexture
-		SDL_Surface* img = IMG_Load(path.c_str());
-		SDL_Surface* image = SDL_ConvertSurface(img, SDL_PIXELFORMAT_RGBA32);
-		SDL_GPUTextureCreateInfo texture_create_info{
-			.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-			.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
-			.width = static_cast<uint32_t>(image->w),
-			.height = static_cast<uint32_t>(image->h),
-			.layer_count_or_depth = 1,
-			.num_levels = 1,
-		};
-
-		SDL_GPUTexture* texture = SDL_CreateGPUTexture(&gpu, &texture_create_info);
-
-		const auto image_byte_size = image->w * image->h * 4;
-
-		SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
-			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-			.size = static_cast<uint32_t>(image_byte_size),
-		};
-		auto tex_transfer_buf = SDL_CreateGPUTransferBuffer(&gpu, &transfer_buffer_create_info);
-
-		auto tex_transfer_mem = SDL_MapGPUTransferBuffer(&gpu, tex_transfer_buf, false);
-
-		std::memcpy(tex_transfer_mem, image->pixels, image_byte_size);
-
-		SDL_UnmapGPUTransferBuffer(&gpu, tex_transfer_buf);
-
 		auto copy_cmd_buf = SDL_AcquireGPUCommandBuffer(&gpu);
 		auto copy_pass = SDL_BeginGPUCopyPass(copy_cmd_buf);
 
-		SDL_GPUTextureTransferInfo texture_transfer_info{
-			.transfer_buffer = tex_transfer_buf,
-		};
-		SDL_GPUTextureRegion texture_region{
-			.texture = texture,
-			.w = static_cast<uint32_t>(image->w),
-			.h = static_cast<uint32_t>(image->h),
-			.d = 1,
-		};
+		glm::ivec2 size;
 
-		SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &texture_region, false);
+		auto texture = IMG_LoadGPUTexture(&gpu, copy_pass, path.c_str(), &size.x, &size.y);
 
 		SDL_EndGPUCopyPass(copy_pass);
-		auto result = SDL_SubmitGPUCommandBuffer(copy_cmd_buf); assert(result);
+		assert(SDL_SubmitGPUCommandBuffer(copy_cmd_buf) && SDL_GetError());
 
-		textures[path] = std::make_shared<Texture>(&gpu, texture, glm::vec2{ image->w, image->h });
-
-		SDL_ReleaseGPUTransferBuffer(&gpu, tex_transfer_buf);
-		SDL_DestroySurface(image);
-		SDL_DestroySurface(img);
+		textures[path] = std::make_shared<Texture>(&gpu, texture, size);
 	}
 
 	return textures.at(path);

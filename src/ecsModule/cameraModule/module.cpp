@@ -8,8 +8,6 @@
 #include "ecsModule/windowModule/module.h"
 #include "ecsModule/windowModule/components.h"
 #include "ext/matrix_clip_space.hpp"
-#include "ext/matrix_transform.hpp"
-#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -27,7 +25,7 @@ CameraModule::CameraModule(flecs::world& world) {
 		.add(flecs::Singleton);
 
 	world.component<VisibleEntities>()
-		.member<std::vector<flecs::entity>>("entities");
+		.member<std::unordered_set<flecs::entity_t>>("entities");
 
 	world.component<RenderLayers>()
 		.member<std::uint32_t>("mask");

@@ -1,7 +1,6 @@
 #include "module.h"
 #include "components.h"
 #include "ecsModule/common.h"
-#include "ecsModule/utils.h"
 #include "ecsModule/ui_module/module.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/windowModule/components.h"
@@ -10,11 +9,10 @@
 #include "ecsModule/meshModule/module.h"
 #include "ecsModule/textModule/module.h"
 #include "ext/matrix_clip_space.hpp"
-#include "ext/matrix_transform.hpp"
-#include "font.h"
 #include "utils/sdl.h"
 #include "utils/visit.h"
-#include <algorithm>
+#include "font.h"
+
 #include <ranges>
 
 using namespace ps;
