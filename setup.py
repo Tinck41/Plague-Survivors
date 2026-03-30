@@ -5,7 +5,6 @@ import shutil
 
 from utils import compile_shaders
 
-
 if __name__ == '__main__':
 	buildFolder = 'build'
 	repoDir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
@@ -24,11 +23,10 @@ if __name__ == '__main__':
 	parser.add_argument('-rel', action='store_true', help='release configuration', default=False)
 	parser.add_argument('-clean', action='store_true', help='remove the build folder', default=False)
 	parser.add_argument('-b', action='store_true', help='build project', default=False)
+	parser.add_argument('-cs', help='compile shader format', required=False)
 	parser.add_argument('generator', type=str, metavar='generator', help='generator name', choices=GENERATOR_ALIASES.keys(), default='ninja')
 	parser.add_argument('platform', type=str, metavar='platform', help='platform name', default='')
 	args = parser.parse_args()
-
-	compile_shaders.compile()
 
 	buildDir = os.path.join(buildDir, args.generator)
 
@@ -71,4 +69,7 @@ if __name__ == '__main__':
 
 		if args.b:
 			subprocess.run(['cmake', '--build', buildDir])
+
+	if args.cs:
+		compile_shaders.compile(args.cs, args.generator)
 

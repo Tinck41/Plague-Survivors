@@ -11,6 +11,12 @@ endif()
 
 set(BOX2D_BUILD_UNIT_TESTS FALSE)
 set(BOX2D_BUILD_TESTBED FALSE)
+set(SDLSHADERCROSS_VENDORED ON)
+set(SDL_SHARED OFF)
+set(SDL_STATIC ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_SHARED_LIBS OFF)
+set(SDLIMAGE_BUILD_SHARED_LIBS OFF)
 
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
@@ -21,11 +27,15 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glm)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_image)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_ttf)
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glaze)
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross)
 
+include_directories(${CMAKE_SOURCE_DIR}/vendor/glaze/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/box2d/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/glm)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/matchit)
+include_directories(${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross/include)
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_executable(${PROJECT_NAME} 
@@ -88,6 +98,10 @@ add_executable(${PROJECT_NAME}
 	src/utils/sdl.cpp
 	src/color.h
 	src/color.cpp
+	src/file.h
+	src/file.cpp
+	src/texture_atlas.h
+	src/texture_atlas.cpp
 	src/utils/visit.h
 )
 
@@ -95,9 +109,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)
 target_link_libraries(${PROJECT_NAME} PRIVATE box2d)
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
 target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::Headers)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_image::SDL3_image)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_ttf::SDL3_ttf)
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_shadercross::SDL3_shadercross)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )

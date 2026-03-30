@@ -1,25 +1,44 @@
 import os
 import subprocess
+import argparse
 
-def compile():
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/camera_composition.vert.hlsl', '-o', 'assets/shaders/out/camera_composition.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/camera_composition.frag.hlsl', '-o', 'assets/shaders/out/camera_composition.frag.msl'])
+SRC_DIR = 'assets/shaders/src'
+OUT_DIR = 'assets/shaders/out'
 
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/ui.vert.hlsl', '-o', 'assets/shaders/out/ui.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/ui.frag.hlsl', '-o', 'assets/shaders/out/ui.frag.msl'])
+EXTENSIONS = {
+	'msl': 'msl',
+	'spirv': 'spv',
+	'dxil': 'dxil',
+}
 
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/sprite.vert.hlsl', '-o', 'assets/shaders/out/sprite.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/sprite.frag.hlsl', '-o', 'assets/shaders/out/sprite.frag.msl'])
+def get_suppported_extensioins():
+	return EXTENSIONS.keys()
 
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/shader_batch.vert.hlsl', '-o', 'assets/shaders/out/shader_batch.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/shader_batch.frag.hlsl', '-o', 'assets/shaders/out/shader_batch.frag.msl'])
+def compile(ext: str, generator: str):
+	SHADERCROSS = os.path.expanduser(f'build/{generator}/vendor/SDL_shadercross/shadercross')
 
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/sprite_batch.vert.hlsl', '-o', 'assets/shaders/out/sprite_batch.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/sprite_batch.frag.hlsl', '-o', 'assets/shaders/out/sprite_batch.frag.msl'])
+	out_ext = EXTENSIONS[ext]
+	os.makedirs(OUT_DIR, exist_ok=True)
 
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/text.vert.hlsl', '-o', 'assets/shaders/out/text.vert.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/text.frag.hlsl', '-o', 'assets/shaders/out/text.frag.msl'])
-	subprocess.run([os.path.expanduser('~/Downloads/SDL3_shadercross-3.0.0-darwin-arm64-x64/bin/shadercross'), 'assets/shaders/src/text_sdf.frag.hlsl', '-o', 'assets/shaders/out/text_sdf.frag.msl'])
+	for root, _, files in os.walk(SRC_DIR):
+		for file in files:
+			if not file.endswith('.hlsl'):
+				continue
+
+			src_path = os.path.join(root, file)
+			out_file = file.replace('.hlsl', f'.{out_ext}')
+			out_path = os.path.join(OUT_DIR, out_file)
+
+			print(f'Compiling {src_path} -> {out_path}')
+			result = subprocess.run([SHADERCROSS, src_path, '-o', out_path])
+
+			if result.returncode != 0:
+				print(f'Failed to compile {src_path}')
 
 if __name__ == '__main__':
-	compile();
+	parser = argparse.ArgumentParser(description='Compile HLSL shaders')
+	parser.add_argument('--ext', choices=EXTENSIONS.keys(), help='Output shader format')
+	parser.add_argument('--g', help='project generator name')
+	args = parser.parse_args()
+
+	compile(args.ext, args.g)
