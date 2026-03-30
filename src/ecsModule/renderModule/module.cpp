@@ -49,6 +49,16 @@ RenderModule::RenderModule(flecs::world& world) {
 		.each([&world](RenderDevice& render_device) {
 			world.each([&render_device](Window& window) {
 				assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
+
+				SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+				if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+					presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+				}
+				else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
+					presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
+				}
+
+				SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
 			});
 		});
 
@@ -56,6 +66,16 @@ RenderModule::RenderModule(flecs::world& world) {
 		.event(flecs::OnSet)
 		.each([](Window& window, RenderDevice& render_device) {
 			assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
+
+			SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+			if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+				presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+			}
+			else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
+				presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
+			}
+
+			SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
 		});
 
 	world.observer<CameraCompositionPipeline, RenderDevice>()
@@ -110,23 +130,28 @@ RenderModule::RenderModule(flecs::world& world) {
 			copy_commands.buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
 		});
 
-	world.system<RenderDevice, CopyCommands, RenderCommands>()
+	world.system<RenderDevice, CopyCommands, RenderCommands>("submit copy commands and acquire render commands")
 		.kind(Phases::Clear)
 		.each([](RenderDevice& device, CopyCommands& copy_commands, RenderCommands& render_commands) {
 			SDL_SubmitGPUCommandBuffer(copy_commands.buffer);
 			render_commands.cmd_buffer = SDL_AcquireGPUCommandBuffer(device.gpu);
-
 		});
 
-	world.system<Window, RenderCommands>()
+	world.system<Window, RenderCommands>("acquire swapchain texture")
 		.kind(Phases::Clear)
 		.each([&world](Window& window, RenderCommands& render_commands) {
+			const auto flags = SDL_GetWindowFlags(window.handle);
+
+			if ((flags & SDL_WINDOW_HIDDEN) || (flags & SDL_WINDOW_MINIMIZED) || (flags & SDL_WINDOW_OCCLUDED)) {
+				return;
+			}
+
 			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &window.swapchain_texture, nullptr, nullptr) && SDL_GetError());
 		});
 
-	world.system<Window, RenderDevice, RenderCommands>()
+	world.system<Window, RenderCommands>("clear swapchain texture")
 		.kind(Phases::Clear)
-		.each([](Window& window, RenderDevice& device, RenderCommands& render_commands) {
+		.each([](Window& window, RenderCommands& render_commands) {
 			auto color_target = SDL_GPUColorTargetInfo{
 				.texture = window.swapchain_texture,
 				.clear_color = BLACK,
@@ -166,7 +191,7 @@ RenderModule::RenderModule(flecs::world& world) {
 				[&world](flecs::entity_t window_entity) {
 					return world.entity(window_entity).get<Window>().swapchain_texture;
 				},
-				[](std::shared_ptr<Texture> texture) {
+				[](std::shared_ptr<Texture>& texture) {
 					return &texture->get_gpu_texture();
 				},
 				[](auto&&) -> SDL_GPUTexture* {
