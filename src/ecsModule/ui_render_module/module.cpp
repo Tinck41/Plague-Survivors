@@ -219,9 +219,16 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.observer<Text, TextData, TextFont, UiTextPipeline>()
 		.event(flecs::OnSet)
 		.each([](flecs::entity e, Text& text, TextData& data, TextFont& font, UiTextPipeline& pipeline){
-			TTF_DestroyText(data.ttf_data);
-			data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
+			if (!data.ttf_data) {
+				data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
+			}
+			else {
+				TTF_SetTextString(data.ttf_data, text.c_str(), text.size());
+			}
+
 			TTF_GetTextSize(data.ttf_data, &data.size.x, &data.size.y);
+
+			data.size = glm::vec2(data.size) * (font.size / font.handle->get_size());
 		});
 
 	world.observer<Text, TextData>()
@@ -519,7 +526,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 		.without<Image>()
 		.build();
 
-	auto text_query = world.query<Node, Text, TextData, TextColor, GlobalTransform, Visible2d>();
+	auto text_query = world.query<Node, Text, TextFont, TextData, TextColor, GlobalTransform, Visible2d>();
 
 	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedUiItems>("collect node images")
 		.with<Camera>()
@@ -565,7 +572,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 		.with<Camera>()
 		.kind(Phases::CollectRenderData)
 		.each([transparent_ui, text_query](flecs::entity camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedUiTextItems& text_items) {
-			text_query.each([&](flecs::entity entity, Node& node, Text& text, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {
+			text_query.each([&](flecs::entity entity, Node& node, Text& text, TextFont& font, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {
 				if (!visible.value) {
 					return;
 				}
@@ -577,7 +584,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				render_items[camera][transparent_ui].emplace_back(entity, &draw_ui_text, static_cast<float>(node.stack_index));
 
 				text_items[camera].lookup[entity] = text_items[camera].items.size();
-				text_items[camera].items.emplace_back(entity, nullptr, transform, color, data.ttf_data);
+				text_items[camera].items.emplace_back(entity, nullptr, transform, color, data.ttf_data, font.size / font.handle->get_size());
 			});
 		});
 
@@ -744,7 +751,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 							const auto uv = seq->uv[j];
 
 							vertices[vertex_count + j] = Vertex{
-								.position{ text_data.transform.translation + glm::vec3{ pos.x, -pos.y, 0.f } },
+								.position{ text_data.transform.translation + glm::vec3{ pos.x, -pos.y, 0.f } * text_data.scale },
 								.color = text_data.color,
 								.uv{ uv.x, uv.y },
 							};

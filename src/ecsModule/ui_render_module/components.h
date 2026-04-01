@@ -67,6 +67,7 @@ namespace ps {
 		Transform transform;
 		Color color;
 		TTF_Text* ttf_data;
+		float scale;
 	};
 
 	struct CollectedUiTextItems {

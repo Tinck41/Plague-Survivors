@@ -73,7 +73,8 @@ TextModule::TextModule(flecs::world& world) {
 	world.component<CameraCollectedTextItems>().add(flecs::Singleton);
 	world.component<CameraTextBatches>().add(flecs::Singleton);
 
-	world.component<TextFont>();
+	world.component<TextFont>()
+		.member("size", &TextFont::size);
 	world.component<TextData>()
 		.member<glm::ivec2>("size");
 
@@ -205,9 +206,16 @@ TextModule::TextModule(flecs::world& world) {
 	world.observer<Text2d, TextData, TextFont, TextPipeline>()
 		.event(flecs::OnSet)
 		.each([](flecs::entity e, Text2d& text, TextData& data, TextFont& font, TextPipeline& pipeline){
-			TTF_DestroyText(data.ttf_data);
-			data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
+			if (!data.ttf_data) {
+				data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
+			}
+			else {
+				TTF_SetTextString(data.ttf_data, text.c_str(), text.size());
+			}
+
 			TTF_GetTextSize(data.ttf_data, &data.size.x, &data.size.y);
+
+			data.size = glm::vec2(data.size) * (font.size / font.handle->get_size());
 		});
 
 	world.observer<Text2d, TextData>()
@@ -226,13 +234,13 @@ TextModule::TextModule(flecs::world& world) {
 		});
 
 	auto transparent_2d = world.component<Transparent2d>();
-	auto text_query = world.query<Text2d, TextData, TextColor, GlobalTransform, Visible2d>();
+	auto text_query = world.query<Text2d, TextFont, TextData, TextColor, GlobalTransform, Visible2d>();
 
 	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedTextItems>()
 		.with<Camera>()
 		.kind(Phases::CollectRenderData)
 		.each([transparent_2d, text_query](flecs::entity camera_entity, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedTextItems& text_items) {
-			text_query.each([&](flecs::entity entity, Text2d& text, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {
+			text_query.each([&](flecs::entity entity, Text2d& text, TextFont& font, TextData& data, TextColor& color, GlobalTransform& transform, Visible2d& visible) {
 				if (!visible.value) {
 					return;
 				}
@@ -244,7 +252,7 @@ TextModule::TextModule(flecs::world& world) {
 				render_items[camera_entity][transparent_2d].emplace_back(entity, &draw_text, transform.translation.z);
 
 				text_items[camera_entity].lookup[entity] = text_items[camera_entity].items.size();
-				text_items[camera_entity].items.emplace_back(entity, nullptr, transform, color, data.ttf_data);
+				text_items[camera_entity].items.emplace_back(entity, nullptr, transform, color, data.ttf_data, font.size / font.handle->get_size());
 		});
 	});
 
@@ -320,7 +328,7 @@ TextModule::TextModule(flecs::world& world) {
 							const auto uv = seq->uv[j];
 
 							vertices[vertex_count + j] = Vertex{
-								.position{ text_data.transform.translation + glm::vec3{ pos.x, -pos.y, 0.f } },
+								.position{ text_data.transform.translation + glm::vec3{ pos.x, -pos.y, 0.f } * text_data.scale },
 								.color = text_data.color,
 								.uv{ uv.x, uv.y },
 							};
@@ -340,6 +348,9 @@ TextModule::TextModule(flecs::world& world) {
 
 					++phase_items[current_batch_index].batch_size;
 				}
+
+				text_items.items.clear();
+				text_items.lookup.clear();
 			}
 
 			if (vertex_count == 0 || index_count == 0) {

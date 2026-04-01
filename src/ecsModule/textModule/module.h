@@ -23,6 +23,7 @@ namespace ps {
 
 	struct TextFont {
 		std::shared_ptr<Font> handle;
+		float size;
 	};
 
 	struct TextColor : public Color {
@@ -57,6 +58,7 @@ namespace ps {
 		Transform transform;
 		Color color;
 		TTF_Text* ttf_data;
+		float scale;
 	};
 
 	struct CollectedTextItems {
