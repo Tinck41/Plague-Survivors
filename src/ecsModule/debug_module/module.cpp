@@ -26,14 +26,14 @@ DebugModule::DebugModule(flecs::world& world) {
 				.add<FpsLabel>()
 				.add<Text>()
 				.set<TextColor>(Color::from_hex("00ff00"))
-				.set<TextFont>({ storage.load_font("assets/FreeSans.ttf", 32) });
+				.set<TextFont>({ storage.load_font("assets/FreeSans.ttf"), 32 });
 
 			world.entity("draw calls label")
 				.set<Transform>({ .translation = {0.f, 30.f, 0.f } })
 				.add<DrawCallsLabel>()
 				.add<Text>()
 				.set<TextColor>(Color::from_hex("00ff00"))
-				.set<TextFont>({ storage.load_font("assets/FreeSans.ttf", 32) });
+				.set<TextFont>({ storage.load_font("assets/FreeSans.ttf"), 32 });
 		});
 
 	world.system<Text>()

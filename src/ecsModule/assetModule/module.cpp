@@ -3,8 +3,11 @@
 #include "SDL3_image/SDL_image.h"
 #include "ecsModule/renderModule/module.h"
 #include "ecsModule/common.h"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
+
+#define FONT_BASE_SIZE 64
 
 void AssetStorage::update() {
 	auto it = textures.begin();
@@ -40,15 +43,23 @@ std::shared_ptr<Texture> AssetStorage::load_texture(SDL_GPUDevice& gpu, const st
 	return textures.at(path);
 }
 
+std::shared_ptr<Font> AssetStorage::load_font(const std::string& path) {
+	return load_font(path, FONT_BASE_SIZE);
+}
+
 std::shared_ptr<Font> AssetStorage::load_font(const std::string& path, float size) {
 	if (!fonts.contains(path)) {
 		TTF_Font* resource = TTF_OpenFont(path.c_str(), size);
 
-		TTF_SetFontSDF(resource, true);
-		// TODO
-		//TTF_SetFontWrapAlignment(resource, TTF_HORIZONTAL_ALIGN_CENTER);
+		if (!resource) {
+			spdlog::error(SDL_GetError());
 
-		fonts[path] = std::make_shared<Font>(resource);
+			return nullptr;
+		}
+
+		TTF_SetFontSDF(resource, true); // TODO: world->get<AppConfig>().use_sdf;
+
+		fonts[path] = std::make_shared<Font>(resource, path);
 	}
 
 	return fonts.at(path);

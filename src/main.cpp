@@ -65,7 +65,7 @@ void init(flecs::world& world, ps::AssetStorage& storage, ps::RenderDevice& devi
 		.set<Transform>({ .translation = {0.f, 0.f, 0.f } })
 		.set<Text2d>({ "check some check for check" })
 		.set<TextColor>(RED)
-		.set<TextFont>({ storage.load_font("assets/FreeSans.ttf", 16) });
+		.set<TextFont>({ storage.load_font("assets/FreeSans.ttf"), 16 });
 
 	//auto child = world.entity("child").add<ps::Node>().child_of(parent);
 	//auto child2 = world.entity("child2").emplace<ps::Node>().emplace<ps::CustomNodeIndex>(0u).child_of(parent);
