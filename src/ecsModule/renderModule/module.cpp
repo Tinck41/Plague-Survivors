@@ -143,6 +143,7 @@ RenderModule::RenderModule(flecs::world& world) {
 			const auto flags = SDL_GetWindowFlags(window.handle);
 
 			if ((flags & SDL_WINDOW_HIDDEN) || (flags & SDL_WINDOW_MINIMIZED) || (flags & SDL_WINDOW_OCCLUDED)) {
+				window.swapchain_texture = nullptr;
 				return;
 			}
 
@@ -152,6 +153,10 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.system<Window, RenderCommands>("clear swapchain texture")
 		.kind(Phases::Clear)
 		.each([](Window& window, RenderCommands& render_commands) {
+			if (!window.swapchain_texture) {
+				return;
+			}
+
 			auto color_target = SDL_GPUColorTargetInfo{
 				.texture = window.swapchain_texture,
 				.clear_color = BLACK,
@@ -199,6 +204,10 @@ RenderModule::RenderModule(flecs::world& world) {
 				}
 			});
 
+			if (!render_texture) {
+				return;
+			}
+
 			auto color_target = SDL_GPUColorTargetInfo{
 				.texture = render_texture,
 				.clear_color = camera.clear_color,
@@ -227,22 +236,28 @@ RenderModule::RenderModule(flecs::world& world) {
 
 					++stats.draw_calls;
 				}
-
-				items.clear();
 			}
 
 			SDL_EndGPURenderPass(pass.render_pass);
 			SDL_PopGPUDebugGroup(render_commands.cmd_buffer);
 		});
 
+	auto main_window_query = world.query_builder<Window>()
+		.with<MainWindow>()
+		.build();
+
 	world.system<CameraCompositionGraph, RenderCommands, CameraCompositionPipeline>()
 		.kind(Phases::Render)
-		.each([&world](CameraCompositionGraph& graph, RenderCommands& render_commands, CameraCompositionPipeline& pipeline) {
+		.each([&world, main_window_query](CameraCompositionGraph& graph, RenderCommands& render_commands, CameraCompositionPipeline& pipeline) {
 			SDL_GPUTexture* swapchain_texture = nullptr;
 
-			world.each([&swapchain_texture](Window& window) {
+			main_window_query.each([&swapchain_texture](Window& window) {
 				swapchain_texture = window.swapchain_texture;
 			});
+
+			if (!swapchain_texture) {
+				return;
+			}
 
 			auto color_target = SDL_GPUColorTargetInfo{
 				.texture = swapchain_texture,
@@ -295,6 +310,12 @@ RenderModule::RenderModule(flecs::world& world) {
 			}
 
 			SDL_EndGPURenderPass(render_pass);
+		});
+
+	world.system<CameraRenderPhaseItems>()
+		.kind(Phases::PostRender)
+		.each([](CameraRenderPhaseItems& render_items) {
+			render_items.clear();
 		});
 
 	world.system<RenderCommands>()
