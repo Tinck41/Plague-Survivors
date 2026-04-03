@@ -66,6 +66,9 @@ UiModule::UiModule(flecs::world& world) {
 		.add(flecs::With, world.component<FocusStrategy>())
 		.add(flecs::With, world.component<Node>());
 
+	world.component<Composite>()
+		.add(flecs::With, world.component<Image>());
+
 	world.observer<CustomNodeIndex>()
 		.event(flecs::OnSet)
 		.with(flecs::ChildOf, flecs::Wildcard)

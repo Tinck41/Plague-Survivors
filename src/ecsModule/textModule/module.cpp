@@ -206,6 +206,10 @@ TextModule::TextModule(flecs::world& world) {
 	world.observer<Text2d, TextData, TextFont, TextPipeline>()
 		.event(flecs::OnSet)
 		.each([](flecs::entity e, Text2d& text, TextData& data, TextFont& font, TextPipeline& pipeline){
+			if (!font.handle) {
+				return;
+			}
+
 			if (!data.ttf_data) {
 				data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
 			}

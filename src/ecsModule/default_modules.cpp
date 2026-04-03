@@ -199,6 +199,22 @@ DefaultModules::DefaultModules(flecs::world& world) {
 		.member<unsigned char>("b")
 		.member<unsigned char>("a");
 
+	world.component<SDL_FRect>()
+		.member<float>("x")
+		.member<float>("y")
+		.member<float>("w")
+		.member<float>("h");
+
+	world.component<std::vector<SDL_FRect>>()
+		.opaque(std_vector_support<SDL_FRect>);
+
+	world.component<TextureAtlas>()
+		.member<std::vector<SDL_FRect>>("textures")
+		.member<size_t>("current_index");
+
+	world.component<std::optional<TextureAtlas>>()
+		.opaque(std_optional_support<TextureAtlas>);
+
 	world.component<Color>()
 		.member<std::uint8_t>("r")
 		.member<std::uint8_t>("g")

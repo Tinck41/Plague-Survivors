@@ -7,6 +7,7 @@
 #include "vec4.hpp"
 #include "texture.h"
 #include "color.h"
+#include "texture_atlas.h"
 
 #include <optional>
 #include <memory>
@@ -17,9 +18,10 @@
 namespace ps {
 	struct Sprite {
 		glm::vec2 origin;
-		std::optional<glm::vec2> custom_size;
 		Color color = WHITE;
+		std::optional<TextureAtlas> texture_atlas;
 		std::shared_ptr<Texture> texture;
+		std::optional<glm::vec2> custom_size;
 	};
 
 	struct SpriteSingle {
@@ -38,6 +40,7 @@ namespace ps {
 		Transform transform;
 		glm::vec4 color;
 		glm::vec2 size;
+		glm::vec2 uv;
 		SpriteKind kind;
 	};
 

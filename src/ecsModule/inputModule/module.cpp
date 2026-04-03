@@ -7,6 +7,7 @@
 #include "core/app_state.h"
 
 #include "SDL3/SDL.h"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -166,8 +167,6 @@ InputModule::InputModule(flecs::world& world) {
 
 	world.component<Input>().add(flecs::Singleton);
 
-	world.set<Input>({});
-
 	world.system<Input, AppState>()
 		.kind(Phases::HandleInput)
 		.each([&world](Input& input, AppState& app_state) {
@@ -224,6 +223,24 @@ InputModule::InputModule(flecs::world& world) {
 
 						window.width = event.width;
 						window.height = event.height;
+					});
+				}
+				else if (event.type == SDL_EVENT_WINDOW_OCCLUDED || event.type == SDL_EVENT_WINDOW_HIDDEN) {
+					world.each([&](flecs::entity window_entity, Window& window) {
+						if (event.window.windowID != SDL_GetWindowID(window.handle)) {
+							return;
+						}
+
+						window.window_state = Window::WindowState::Hidden;
+					});
+				}
+				else if (event.type == SDL_EVENT_WINDOW_EXPOSED) {
+					world.each([&](flecs::entity window_entity, Window& window) {
+						if (event.window.windowID != SDL_GetWindowID(window.handle)) {
+							return;
+						}
+
+						window.window_state = Window::WindowState::Present;
 					});
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {

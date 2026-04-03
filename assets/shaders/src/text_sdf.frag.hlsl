@@ -12,8 +12,8 @@ struct Output {
 
 Output main(Input input) {
 	Output output;
-	const float smoothing = (1.0 / 16.0);
 	float distance = tex.Sample(samp, input.tex_coord).a;
+	const float smoothing = fwidth(distance) * 0.7;
 	float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
 	output.color = float4(input.color.rgb, input.color.a * alpha);
 	return output;

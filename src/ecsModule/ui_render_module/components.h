@@ -11,16 +11,36 @@
 
 #include <memory>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace ps {
+	struct NodeSingle {
+		std::optional<glm::vec2> custom_size;
+	};
+
+	struct NodeSequence {
+		std::pair<size_t, size_t> range;
+	};
+
+	using NodeKind = std::variant<NodeSingle, NodeSequence>;
+
 	struct CollectedUiItem {
 		flecs::entity_t entity;
 		std::shared_ptr<Texture> texture;
 		Transform transform;
 		Color color;
 		glm::vec2 size;
+		NodeKind kind;
 	};
+
+	struct Test {
+		SDL_FRect rect;
+		glm::vec2 size;
+		glm::vec2 local_pos;
+	};
+
+	using TestSeq = std::vector<Test>;
 
 	struct CollectedUiItems {
 		std::vector<CollectedUiItem> items;

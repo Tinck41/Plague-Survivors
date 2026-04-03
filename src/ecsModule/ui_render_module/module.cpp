@@ -198,15 +198,16 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.import<MeshModule>();
 	world.import<TextModule>();
 
-	world.component<UiPipeline>() .add(flecs::Singleton);
-	world.component<UiStorage>() .add(flecs::Singleton);
-	world.component<CameraUiBatches>() .add(flecs::Singleton);
-	world.component<CameraCollectedUiItems>() .add(flecs::Singleton);
+	world.component<UiPipeline>().add(flecs::Singleton);
+	world.component<UiStorage>().add(flecs::Singleton);
+	world.component<CameraUiBatches>().add(flecs::Singleton);
+	world.component<CameraCollectedUiItems>().add(flecs::Singleton);
 
 	world.component<UiTextStorage>().add(flecs::Singleton);
 	world.component<UiTextPipeline>().add(flecs::Singleton);
 	world.component<CameraCollectedUiTextItems>().add(flecs::Singleton);
 	world.component<CameraUiTextBatches>().add(flecs::Singleton);
+	world.component<TestSeq>().add(flecs::Singleton);
 
 	auto transparent_ui = world.component<TransparentUi>()
 		.is_a<RenderPhase>();
@@ -219,6 +220,10 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.observer<Text, TextData, TextFont, UiTextPipeline>()
 		.event(flecs::OnSet)
 		.each([](flecs::entity e, Text& text, TextData& data, TextFont& font, UiTextPipeline& pipeline){
+			if (!font.handle) {
+				return;
+			}
+
 			if (!data.ttf_data) {
 				data.ttf_data = TTF_CreateText(pipeline.engine, *font.handle, text.c_str(), text.size());
 			}
@@ -520,7 +525,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 			aabb.max = glm::vec2(transform.translation) + glm::vec2(data.size);
 		});
 
-	auto image_query = world.query<Node, Image, GlobalTransform, Visible2d>();
+	auto image_query = world.query<Node, Image, Composite*, GlobalTransform, Visible2d>();
 
 	auto color_query = world.query_builder<Node, GlobalTransform, Visible2d, BackgroundColor>()
 		.without<Image>()
@@ -528,11 +533,11 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 
 	auto text_query = world.query<Node, Text, TextFont, TextData, TextColor, GlobalTransform, Visible2d>();
 
-	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedUiItems>("collect node images")
+	world.system<VisibleEntities, CameraRenderPhaseItems, CameraCollectedUiItems, TestSeq>("collect node images")
 		.with<Camera>()
 		.kind(Phases::CollectRenderData)
-		.each([transparent_ui, image_query](flecs::entity camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedUiItems& ui_items) {
-			image_query.each([&](flecs::entity entity, Node& node, Image& image, GlobalTransform& transform, Visible2d& visible) {
+		.each([transparent_ui, image_query](flecs::entity camera, VisibleEntities& visible_entities, CameraRenderPhaseItems& render_items, CameraCollectedUiItems& ui_items, TestSeq& test_seq) {
+			image_query.each([&](flecs::entity entity, Node& node, Image& image, Composite* composite, GlobalTransform& transform, Visible2d& visible) {
 				if (!visible.value) {
 					return;
 				}
@@ -544,7 +549,67 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				render_items[camera][transparent_ui].emplace_back(entity, &draw, static_cast<float>(node.stack_index));
 
 				ui_items[camera].lookup[entity] = ui_items[camera].items.size();
-				ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size());
+
+				if (composite) {
+					auto atlas = image.texture_atlas.value();
+
+					const auto start = test_seq.size();
+
+					if (composite->structure[0] & 0b0000'111) { // nine slices
+						const auto top_left_rect = atlas.textures.at("topLeft");
+						const auto top_right_rect = atlas.textures.at("topRight");
+						const auto bot_left_rect = atlas.textures.at("botLeft");
+						const auto bot_right_rect = atlas.textures.at("botRight");
+						const auto top_rect = atlas.textures.at("top");
+						const auto bot_rect = atlas.textures.at("bot");
+						const auto left_rect = atlas.textures.at("left");
+						const auto right_rect = atlas.textures.at("right");
+						const auto mid_rect = atlas.textures.at("mid");
+
+						const auto top_height = top_left_rect.h;
+						const auto bot_height = bot_left_rect.h;
+						const auto left_width = top_left_rect.w;
+						const auto right_width = top_right_rect.w;
+
+						const auto mid_width = node.size.x - left_width - right_width;
+						const auto mid_height = node.size.y - top_height - bot_height;
+
+						test_seq.emplace_back(top_left_rect, glm::vec2{ top_left_rect.w, top_left_rect.h }, glm::vec2{ 0.f, 0.f });
+						test_seq.emplace_back(top_rect, glm::vec2{ mid_width, top_height }, glm::vec2{ left_width, 0.f });
+						test_seq.emplace_back(top_right_rect, glm::vec2{ top_right_rect.w, top_right_rect.h }, glm::vec2{ left_width + mid_width, 0.f });
+						test_seq.emplace_back(left_rect, glm::vec2{ left_width, mid_height }, glm::vec2{ 0.f, top_height });
+						test_seq.emplace_back(mid_rect, glm::vec2{ mid_width, mid_height }, glm::vec2{ left_width, top_height });
+						test_seq.emplace_back(right_rect, glm::vec2{ right_width, mid_height }, glm::vec2{ left_width + mid_width, top_height });
+						test_seq.emplace_back(bot_left_rect, glm::vec2{ bot_left_rect.w, bot_left_rect.h }, glm::vec2{ 0.f, top_height + mid_height });
+						test_seq.emplace_back(bot_rect, glm::vec2{ mid_width, bot_height }, glm::vec2{ left_width, top_height + mid_height });
+						test_seq.emplace_back(bot_right_rect, glm::vec2{ bot_right_rect.w, bot_right_rect.h }, glm::vec2{ left_width + mid_width, top_height + mid_height });
+					}
+					else if (composite->structure[0] & 0b0001'010) {// three vertical
+						const auto top_rect = atlas.textures.at("top");
+						const auto bot_rect = atlas.textures.at("bot");
+						const auto mid_rect = atlas.textures.at("mid");
+						const auto mid_rect_height = node.size.y - top_rect.h - bot_rect.h;
+
+						test_seq.emplace_back(top_rect, glm::vec2{ top_rect.w, top_rect.h }, glm::vec2{ 0.f, 0.f });
+						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect.w, mid_rect_height }, glm::vec2{ 0.f, top_rect.h });
+						test_seq.emplace_back(bot_rect, glm::vec2{ bot_rect.w, bot_rect.h }, glm::vec2{ 0.f, top_rect.h + mid_rect_height });
+					}
+					else { // three horizontal
+						const auto left_rect = atlas.textures.at("left");
+						const auto right_rect = atlas.textures.at("right");
+						const auto mid_rect = atlas.textures.at("mid");
+						const auto mid_rect_width = node.size.x - left_rect.w - right_rect.w;
+
+						test_seq.emplace_back(left_rect, glm::vec2{ left_rect.w, left_rect.h }, glm::vec2{ 0.f, 0.f });
+						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect_width, mid_rect.h }, glm::vec2{ left_rect.w, 0.f });
+						test_seq.emplace_back(right_rect, glm::vec2{ right_rect.w, right_rect.h }, glm::vec2{ left_rect.w + mid_rect_width, 0.f });
+					}
+
+					ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size(), NodeSequence{ { start, test_seq.size() } });
+				} else {
+					ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size(), NodeSingle{});
+				}
+
 			});
 		});
 
@@ -564,7 +629,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				render_items[camera][transparent_ui].emplace_back(entity, &draw, static_cast<float>(node.stack_index));
 
 				ui_items[camera].lookup[entity] = ui_items[camera].items.size();
-				ui_items[camera].items.emplace_back(entity, white_texture.texture, transform, color, node.size);
+				ui_items[camera].items.emplace_back(entity, white_texture.texture, transform, color, node.size, NodeSingle{});
 			});
 		});
 
@@ -590,7 +655,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 
 	world.system<CameraRenderPhaseItems, CameraCollectedUiItems, CameraUiBatches, UiStorage, RenderDevice, CopyCommands>("generate ui batches")
 		.kind(Phases::PrepareRenderData)
-		.each([transparent_ui](CameraRenderPhaseItems& camera_render_items, CameraCollectedUiItems& camera_ui_items, CameraUiBatches& camera_batches, UiStorage& storage, RenderDevice& device, CopyCommands& copy_commands) {
+		.each([&world, transparent_ui](CameraRenderPhaseItems& camera_render_items, CameraCollectedUiItems& camera_ui_items, CameraUiBatches& camera_batches, UiStorage& storage, RenderDevice& device, CopyCommands& copy_commands) {
 			camera_batches.clear();
 
 			auto vertices = static_cast<Vertex*>(SDL_MapGPUTransferBuffer(device.gpu, storage.transfer_buffer, false));
@@ -637,20 +702,49 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 					const auto color = ui_node.color;
 					const auto size = ui_node.size;
 
-					vertices[current_vertex + 0] = { { pos.x         , pos.y + size.y, 0.f }, color, { 0.f, 1.f } };
-					vertices[current_vertex + 1] = { { pos.x + size.x, pos.y + size.y, 0.f }, color, { 1.f, 1.f } };
-					vertices[current_vertex + 2] = { { pos.x + size.x, pos.y         , 0.f }, color, { 1.f, 0.f } };
-					vertices[current_vertex + 3] = { { pos.x         , pos.y         , 0.f }, color, { 0.f, 0.f } };
+					visit(ui_node.kind, visitors {
+						[&](const NodeSingle&) {
+							vertices[current_vertex + 0] = { { pos.x         , pos.y + size.y, 0.f }, color, { 0.f, 1.f } };
+							vertices[current_vertex + 1] = { { pos.x + size.x, pos.y + size.y, 0.f }, color, { 1.f, 1.f } };
+							vertices[current_vertex + 2] = { { pos.x + size.x, pos.y         , 0.f }, color, { 1.f, 0.f } };
+							vertices[current_vertex + 3] = { { pos.x         , pos.y         , 0.f }, color, { 0.f, 0.f } };
 
-					current_vertex += 4;
+							current_vertex += 4;
 
-					++current_batch.size;
+							++current_batch.size;
+						},
+						[&](const NodeSequence& sequence) {
+							const auto& seq = world.get<TestSeq>();
+
+							for (size_t i = sequence.range.first; i < sequence.range.second; ++i) {
+								const auto& item = seq[i];
+
+								const auto item_pos = glm::vec2(pos) + item.local_pos;
+								const auto tex_size = ui_node.texture->get_size();
+
+								const auto u0 = item.rect.x / tex_size.x;
+								const auto v0 = item.rect.y / tex_size.y;
+								const auto u1 = (item.rect.x + item.rect.w) / tex_size.x;
+								const auto v1 = (item.rect.y + item.rect.h) / tex_size.y;
+
+								vertices[current_vertex + 0] = { { item_pos.x              , item_pos.y + item.size.y, 0.f }, color, { u0, v1 } };
+								vertices[current_vertex + 1] = { { item_pos.x + item.size.x, item_pos.y + item.size.y, 0.f }, color, { u1, v1 } };
+								vertices[current_vertex + 2] = { { item_pos.x + item.size.x, item_pos.y              , 0.f }, color, { u1, v0 } };
+								vertices[current_vertex + 3] = { { item_pos.x              , item_pos.y              , 0.f }, color, { u0, v0 } };
+
+								current_vertex += 4;
+
+								++current_batch.size;
+							}
+						}
+					});
+
 					++phase_items[current_batch_index].batch_size;
-
 				}
 
 				ui_items.items.clear();
 				ui_items.lookup.clear();
+				world.get_mut<TestSeq>().clear();
 			}
 
 			if (current_vertex == 0) {
@@ -819,4 +913,5 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.add<UiTextStorage>();
 	world.add<CameraUiTextBatches>();
 	world.add<CameraCollectedUiTextItems>();
+	world.add<TestSeq>();
 }

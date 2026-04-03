@@ -1,9 +1,18 @@
-using ps.TransformModule
-using ps.RenderModule
-using ps.CameraModule
+using ps.UiModule
 
-ps.CameraModule.EcsCamera {
-	Camera
-	Velocity: { 7, 7 }
+window {
+	Node
+
+	titleBg {
+		Node
+
+		title {
+			Node
+		}
+	}
+
+	closeButton {
+		Node
+	}
 }
 

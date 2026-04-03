@@ -3,10 +3,12 @@
 using namespace ps;
 
 Window Window::create(const char *title, int width, int height, SDL_WindowFlags flags) {
+	auto window = SDL_CreateWindow(title, width, height, flags);
 	return {
 		.width = width,
 		.height = height,
-		.handle = SDL_CreateWindow(title, width, height, flags),
+		.handle = window,
+		.window_id = SDL_GetWindowID(window),
 	};
 }
 

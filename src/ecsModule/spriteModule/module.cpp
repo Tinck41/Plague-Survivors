@@ -73,8 +73,9 @@ SpriteModule::SpriteModule(flecs::world& world) {
 
 	world.component<Sprite>()
 		.member<glm::vec2>("origin")
-		.member<std::optional<glm::vec2>>("custom_size")
-		.member<Color>("color");
+		.member<Color>("color")
+		.member<std::optional<TextureAtlas>>("texture_atlas")
+		.member<std::optional<glm::vec2>>("custom_size");
 
 	auto transparend_2d = world.component<Transparent2d>()
 		.is_a<RenderPhase>();
@@ -251,6 +252,18 @@ SpriteModule::SpriteModule(flecs::world& world) {
 					return;
 				}
 
+				const auto [size, uv] = [&sprite] {
+					//if (sprite.texture_atlas) {
+					//	const auto& rect = sprite.texture_atlas.value().textures.at(sprite.texture_atlas.value().current_index);
+					//	const auto size = glm::vec2(rect.w, rect.h);
+					//	const auto uv = glm::vec2(rect.x, rect.y) / sprite.texture->get_size();
+
+					//	return std::make_pair(size, uv);
+					//}
+
+					return std::make_pair(sprite.texture->get_size(), glm::vec2(1.f, 1.f));
+				}();
+
 				render_items[camera_entity][transparend_2d].emplace_back(entity, &draw_sprite, transform.translation.z);
 
 				sprite_items[camera_entity].lookup[entity] = sprite_items[camera_entity].items.size();
@@ -259,7 +272,8 @@ SpriteModule::SpriteModule(flecs::world& world) {
 					sprite.texture,
 					transform,
 					sprite.color,
-					sprite.texture->get_size(),
+					size,
+					uv,
 					SpriteSingle{
 						.custom_size = sprite.custom_size
 					}
@@ -311,8 +325,8 @@ SpriteModule::SpriteModule(flecs::world& world) {
 					instances[current_instance].rotation    = glm::vec4(sprite.transform.rotation, 0.f);
 					instances[current_instance].scale       = glm::vec4(sprite.transform.scale * glm::vec3(sprite.size, 0.f), 0.f);
 					instances[current_instance].color       = sprite.color;
-					instances[current_instance].uv          = glm::vec2(0.f, 0.f); // TODO
-					instances[current_instance].size        = glm::vec2(1.f, 1.f); // TODO
+					instances[current_instance].uv          = sprite.uv;
+					instances[current_instance].size        = sprite.size / sprite.texture->get_size();
 
 					++current_batch.size;
 					++current_instance;

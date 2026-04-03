@@ -50,15 +50,15 @@ RenderModule::RenderModule(flecs::world& world) {
 			world.each([&render_device](Window& window) {
 				assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
 
-				SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
-				if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
-					presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
-				}
-				else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
-					presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
-				}
+				//SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+				//if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+				//	presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+				//}
+				//else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
+				//	presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
+				//}
 
-				SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
+				//SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
 			});
 		});
 
@@ -67,15 +67,15 @@ RenderModule::RenderModule(flecs::world& world) {
 		.each([](Window& window, RenderDevice& render_device) {
 			assert(SDL_ClaimWindowForGPUDevice(render_device.gpu, window.handle) && SDL_GetError());
 
-			SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
-			if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
-				presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
-			}
-			else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
-				presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
-			}
+			//SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+			//if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+			//	presentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
+			//}
+			//else if (SDL_WindowSupportsGPUPresentMode(render_device.gpu, window.handle, SDL_GPU_PRESENTMODE_MAILBOX)) {
+			//	presentMode = SDL_GPU_PRESENTMODE_MAILBOX;
+			//}
 
-			SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
+			//SDL_SetGPUSwapchainParameters(render_device.gpu, window.handle, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, presentMode);
 		});
 
 	world.observer<CameraCompositionPipeline, RenderDevice>()
@@ -142,10 +142,10 @@ RenderModule::RenderModule(flecs::world& world) {
 		.each([&world](Window& window, RenderCommands& render_commands) {
 			const auto flags = SDL_GetWindowFlags(window.handle);
 
-			if ((flags & SDL_WINDOW_HIDDEN) || (flags & SDL_WINDOW_MINIMIZED) || (flags & SDL_WINDOW_OCCLUDED)) {
-				window.swapchain_texture = nullptr;
-				return;
-			}
+			//if ((flags & SDL_WINDOW_HIDDEN) || (flags & SDL_WINDOW_MINIMIZED) || (flags & SDL_WINDOW_OCCLUDED)) {
+			//	window.swapchain_texture = nullptr;
+			//	return;
+			//}
 
 			assert(SDL_WaitAndAcquireGPUSwapchainTexture(render_commands.cmd_buffer, window.handle, &window.swapchain_texture, nullptr, nullptr) && SDL_GetError());
 		});
@@ -324,7 +324,7 @@ RenderModule::RenderModule(flecs::world& world) {
 			assert(SDL_SubmitGPUCommandBuffer(render_commands.cmd_buffer) && SDL_GetError());
 		});
 
-	auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
+	auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, nullptr);
 
 	assert(gpu && SDL_GetError());
 

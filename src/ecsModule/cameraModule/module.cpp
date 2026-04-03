@@ -4,10 +4,12 @@
 //#include "ecsModule/physicsModule/module.h"
 //#include "ecsModule/renderModule/module.h"
 //#include "ecsModule/timeModule/module.h"
+#include "ecsModule/inputModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/windowModule/module.h"
 #include "ecsModule/windowModule/components.h"
 #include "ext/matrix_clip_space.hpp"
+#include "spdlog/spdlog.h"
 
 using namespace ps;
 
@@ -17,10 +19,11 @@ CameraModule::CameraModule(flecs::world& world) {
 	//world.import<PhysicsModule>();
 	world.import<TransformModule>();
 	world.import<WindowModule>();
+	world.import<InputModule>();
 	//world.import<TimeModule>();
 	//world.import<RenderModule>();
 
-	// NOTE: requires RednerModule::CameraCompositionPipeline
+	// NOTE: requires RenderModule::CameraCompositionPipeline
 	world.component<CameraCompositionGraph>()
 		.add(flecs::Singleton);
 
@@ -105,6 +108,10 @@ CameraModule::CameraModule(flecs::world& world) {
 		.kind(Phases::PostUpdate)
 		.each([visible_query](flecs::entity entity, Camera& camera, GlobalTransform& transform, RenderLayers& camera_render_layers, VisibleEntities& visible_entities) {
 			visible_entities.entities.clear();
+
+			if (camera.skip_visible_check) {
+				return;
+			}
 
 			Aabb camera_aabb{
 				.min = glm::vec2(transform.translation),

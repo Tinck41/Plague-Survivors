@@ -10,6 +10,9 @@
 [submodule "vendor/raylib"]
 	path = vendor/raylib
 	url = https://github.com/raysan5/raylib
+[submodule "vendor/glaze"]
+	path = vendor/glaze
+	url = https://github.com/stephenberry/glaze
 [submodule "vendor/SDL_shadercross"]
 	path = vendor/SDL_shadercross
 	url = https://github.com/libsdl-org/SDL_shadercross.git

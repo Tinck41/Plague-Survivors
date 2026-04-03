@@ -5,6 +5,11 @@
 
 namespace ps {
 	struct Window {
+		enum class WindowState : std::uint8_t {
+			Hidden,
+			Present,
+		};
+
 		int width;
 		int height;
 
@@ -12,6 +17,10 @@ namespace ps {
 
 		SDL_Window* handle;
 		SDL_GPUTexture* swapchain_texture;
+
+		std::uint32_t window_id;
+
+		WindowState window_state = WindowState::Present;
 
 		static Window create(const char* title, int width, int height, SDL_WindowFlags flags = 0);
 		static Window create(const char* title, glm::ivec2 size, SDL_WindowFlags flags = 0);

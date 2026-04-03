@@ -4,8 +4,10 @@
 #include "flecs.h"
 #include "texture.h"
 #include "color.h"
+#include "texture_atlas.h"
 
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace ps {
@@ -41,6 +43,7 @@ namespace ps {
 
 	struct Image {
 		std::shared_ptr<Texture> texture;
+		std::optional<TextureAtlas> texture_atlas;
 		Color color;
 	};
 
@@ -48,6 +51,46 @@ namespace ps {
 		using std::string::string;
 
 		Text(const std::string& string) : std::string(string) {}
+	};
+
+	struct Composite {
+		enum class Element : std::uint8_t {
+			TopLeft,
+			Top,
+			TopRight,
+			Left,
+			Middle,
+			Right,
+			BotLeft,
+			Bot,
+			BotRight,
+		};
+
+		static Composite create_3_v() {
+			return {{
+				0b00000'010,
+				0b00000'010,
+				0b00000'010
+			}};
+		}
+
+		static Composite create_3_h() {
+			return {{
+				0b00000'000,
+				0b00000'111,
+				0b00000'000
+			}};
+		}
+
+		static Composite create_9() {
+			return {{
+				0b00000'111,
+				0b00000'111,
+				0b00000'111
+			}};
+		}
+
+		std::array<std::uint8_t, 3> structure;
 	};
 
 	struct BackgroundColor : public Color {

@@ -24,6 +24,8 @@ namespace ps {
 		Color clear_color = TRANSPARENT;
 
 		SDL_GPULoadOp load_op = SDL_GPU_LOADOP_CLEAR;
+
+		bool skip_visible_check = false;
 	};
 
 	struct WindowResize {
