@@ -2,12 +2,14 @@ struct Input {
 	float3 position : POSITION;
 	float4 color : TEXCOORD1;
 	float2 uv : TEXCOORD0;
+	uint flags : TEXCOORD2;
 };
 
 struct Output {
 	float4 position : SV_Position;
 	float4 color : TEXCOORD1;
 	float2 uv : TEXCOORD0;
+	uint flags : TEXCOORD2;
 };
 
 cbuffer UniformBlock : register(b0, space1) {
@@ -20,6 +22,7 @@ Output main(Input input) {
 	output.position = mul(mvp, float4(input.position, 1));
 	output.color = input.color;
 	output.uv = input.uv;
+	output.flags = input.flags;
 
 	return output;
 }

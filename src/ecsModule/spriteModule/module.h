@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "flecs.h"
 #include "vec2.hpp"
@@ -14,6 +13,7 @@
 #include <map>
 #include <variant>
 #include <vector>
+#include <unordered_map>
 
 namespace ps {
 	struct Sprite {
@@ -89,7 +89,7 @@ namespace ps {
 	using SpriteBatches = std::map<flecs::entity_t, SpriteBatch>;
 	using CameraSpriteBatches = std::map<flecs::entity_t, SpriteBatches>;
 
-	struct Transparent2d : public RenderPhase {};
+	struct Transparent2d {};
 
 	struct SpriteModule {
 		SpriteModule(flecs::world& world);

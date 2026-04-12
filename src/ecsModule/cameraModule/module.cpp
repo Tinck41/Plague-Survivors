@@ -37,6 +37,7 @@ CameraModule::CameraModule(flecs::world& world) {
 		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<VisibleEntities>())
 		.add(flecs::With, world.component<Transform>())
+		.add(flecs::With, world.component<Aabb>())
 //		.add(flecs::With, world.component<Velocity>())
 		.add(flecs::Exclusive);
 
@@ -94,6 +95,13 @@ CameraModule::CameraModule(flecs::world& world) {
 				camera.projection = glm::ortho(0.f, static_cast<float>(eventData->width), static_cast<float>(eventData->height), 0.f, -1.f, 1.f);
 				camera.viewport = glm::vec2(eventData->width, eventData->height);
 			}
+		});
+
+	world.system<Camera, GlobalTransform, Aabb>()
+		.kind(Phases::Update)
+		.each([](Camera& camera, GlobalTransform& transform, Aabb& aabb) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + camera.viewport;
 		});
 
 	world.system<Visible2d>()

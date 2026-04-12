@@ -195,7 +195,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.import<TransformModule>();
 	world.import<RenderModule>();
 	world.import<CameraModule>();
-	world.import<MeshModule>();
+	//world.import<MeshModule>();
 	world.import<TextModule>();
 
 	world.component<UiPipeline>().add(flecs::Singleton);
@@ -551,61 +551,61 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				ui_items[camera].lookup[entity] = ui_items[camera].items.size();
 
 				if (composite) {
-					auto atlas = image.texture_atlas.value();
-
-					const auto start = test_seq.size();
-
-					if (composite->structure[0] & 0b0000'111) { // nine slices
-						const auto top_left_rect = atlas.textures.at("topLeft");
-						const auto top_right_rect = atlas.textures.at("topRight");
-						const auto bot_left_rect = atlas.textures.at("botLeft");
-						const auto bot_right_rect = atlas.textures.at("botRight");
-						const auto top_rect = atlas.textures.at("top");
-						const auto bot_rect = atlas.textures.at("bot");
-						const auto left_rect = atlas.textures.at("left");
-						const auto right_rect = atlas.textures.at("right");
-						const auto mid_rect = atlas.textures.at("mid");
-
-						const auto top_height = top_left_rect.h;
-						const auto bot_height = bot_left_rect.h;
-						const auto left_width = top_left_rect.w;
-						const auto right_width = top_right_rect.w;
-
-						const auto mid_width = node.size.x - left_width - right_width;
-						const auto mid_height = node.size.y - top_height - bot_height;
-
-						test_seq.emplace_back(top_left_rect, glm::vec2{ top_left_rect.w, top_left_rect.h }, glm::vec2{ 0.f, 0.f });
-						test_seq.emplace_back(top_rect, glm::vec2{ mid_width, top_height }, glm::vec2{ left_width, 0.f });
-						test_seq.emplace_back(top_right_rect, glm::vec2{ top_right_rect.w, top_right_rect.h }, glm::vec2{ left_width + mid_width, 0.f });
-						test_seq.emplace_back(left_rect, glm::vec2{ left_width, mid_height }, glm::vec2{ 0.f, top_height });
-						test_seq.emplace_back(mid_rect, glm::vec2{ mid_width, mid_height }, glm::vec2{ left_width, top_height });
-						test_seq.emplace_back(right_rect, glm::vec2{ right_width, mid_height }, glm::vec2{ left_width + mid_width, top_height });
-						test_seq.emplace_back(bot_left_rect, glm::vec2{ bot_left_rect.w, bot_left_rect.h }, glm::vec2{ 0.f, top_height + mid_height });
-						test_seq.emplace_back(bot_rect, glm::vec2{ mid_width, bot_height }, glm::vec2{ left_width, top_height + mid_height });
-						test_seq.emplace_back(bot_right_rect, glm::vec2{ bot_right_rect.w, bot_right_rect.h }, glm::vec2{ left_width + mid_width, top_height + mid_height });
-					}
-					else if (composite->structure[0] & 0b0001'010) {// three vertical
-						const auto top_rect = atlas.textures.at("top");
-						const auto bot_rect = atlas.textures.at("bot");
-						const auto mid_rect = atlas.textures.at("mid");
-						const auto mid_rect_height = node.size.y - top_rect.h - bot_rect.h;
-
-						test_seq.emplace_back(top_rect, glm::vec2{ top_rect.w, top_rect.h }, glm::vec2{ 0.f, 0.f });
-						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect.w, mid_rect_height }, glm::vec2{ 0.f, top_rect.h });
-						test_seq.emplace_back(bot_rect, glm::vec2{ bot_rect.w, bot_rect.h }, glm::vec2{ 0.f, top_rect.h + mid_rect_height });
-					}
-					else { // three horizontal
-						const auto left_rect = atlas.textures.at("left");
-						const auto right_rect = atlas.textures.at("right");
-						const auto mid_rect = atlas.textures.at("mid");
-						const auto mid_rect_width = node.size.x - left_rect.w - right_rect.w;
-
-						test_seq.emplace_back(left_rect, glm::vec2{ left_rect.w, left_rect.h }, glm::vec2{ 0.f, 0.f });
-						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect_width, mid_rect.h }, glm::vec2{ left_rect.w, 0.f });
-						test_seq.emplace_back(right_rect, glm::vec2{ right_rect.w, right_rect.h }, glm::vec2{ left_rect.w + mid_rect_width, 0.f });
-					}
-
-					ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size(), NodeSequence{ { start, test_seq.size() } });
+//					auto atlas = image.texture_atlas.value();
+//
+//					const auto start = test_seq.size();
+//
+//					if (composite->structure[0] & 0b0000'111) { // nine slices
+//						const auto top_left_rect = atlas.textures.at("topLeft");
+//						const auto top_right_rect = atlas.textures.at("topRight");
+//						const auto bot_left_rect = atlas.textures.at("botLeft");
+//						const auto bot_right_rect = atlas.textures.at("botRight");
+//						const auto top_rect = atlas.textures.at("top");
+//						const auto bot_rect = atlas.textures.at("bot");
+//						const auto left_rect = atlas.textures.at("left");
+//						const auto right_rect = atlas.textures.at("right");
+//						const auto mid_rect = atlas.textures.at("mid");
+//
+//						const auto top_height = top_left_rect.h;
+//						const auto bot_height = bot_left_rect.h;
+//						const auto left_width = top_left_rect.w;
+//						const auto right_width = top_right_rect.w;
+//
+//						const auto mid_width = node.size.x - left_width - right_width;
+//						const auto mid_height = node.size.y - top_height - bot_height;
+//
+//						test_seq.emplace_back(top_left_rect, glm::vec2{ top_left_rect.w, top_left_rect.h }, glm::vec2{ 0.f, 0.f });
+//						test_seq.emplace_back(top_rect, glm::vec2{ mid_width, top_height }, glm::vec2{ left_width, 0.f });
+//						test_seq.emplace_back(top_right_rect, glm::vec2{ top_right_rect.w, top_right_rect.h }, glm::vec2{ left_width + mid_width, 0.f });
+//						test_seq.emplace_back(left_rect, glm::vec2{ left_width, mid_height }, glm::vec2{ 0.f, top_height });
+//						test_seq.emplace_back(mid_rect, glm::vec2{ mid_width, mid_height }, glm::vec2{ left_width, top_height });
+//						test_seq.emplace_back(right_rect, glm::vec2{ right_width, mid_height }, glm::vec2{ left_width + mid_width, top_height });
+//						test_seq.emplace_back(bot_left_rect, glm::vec2{ bot_left_rect.w, bot_left_rect.h }, glm::vec2{ 0.f, top_height + mid_height });
+//						test_seq.emplace_back(bot_rect, glm::vec2{ mid_width, bot_height }, glm::vec2{ left_width, top_height + mid_height });
+//						test_seq.emplace_back(bot_right_rect, glm::vec2{ bot_right_rect.w, bot_right_rect.h }, glm::vec2{ left_width + mid_width, top_height + mid_height });
+//					}
+//					else if (composite->structure[0] & 0b0001'010) {// three vertical
+//						const auto top_rect = atlas.textures.at("top");
+//						const auto bot_rect = atlas.textures.at("bot");
+//						const auto mid_rect = atlas.textures.at("mid");
+//						const auto mid_rect_height = node.size.y - top_rect.h - bot_rect.h;
+//
+//						test_seq.emplace_back(top_rect, glm::vec2{ top_rect.w, top_rect.h }, glm::vec2{ 0.f, 0.f });
+//						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect.w, mid_rect_height }, glm::vec2{ 0.f, top_rect.h });
+//						test_seq.emplace_back(bot_rect, glm::vec2{ bot_rect.w, bot_rect.h }, glm::vec2{ 0.f, top_rect.h + mid_rect_height });
+//					}
+//					else { // three horizontal
+//						const auto left_rect = atlas.textures.at("left");
+//						const auto right_rect = atlas.textures.at("right");
+//						const auto mid_rect = atlas.textures.at("mid");
+//						const auto mid_rect_width = node.size.x - left_rect.w - right_rect.w;
+//
+//						test_seq.emplace_back(left_rect, glm::vec2{ left_rect.w, left_rect.h }, glm::vec2{ 0.f, 0.f });
+//						test_seq.emplace_back(mid_rect, glm::vec2{ mid_rect_width, mid_rect.h }, glm::vec2{ left_rect.w, 0.f });
+//						test_seq.emplace_back(right_rect, glm::vec2{ right_rect.w, right_rect.h }, glm::vec2{ left_rect.w + mid_rect_width, 0.f });
+//					}
+//
+//					ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size(), NodeSequence{ { start, test_seq.size() } });
 				} else {
 					ui_items[camera].items.emplace_back(entity, image.texture, transform, image.color, image.texture->get_size(), NodeSingle{});
 				}

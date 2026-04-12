@@ -117,6 +117,30 @@ UiModule::UiModule(flecs::world& world) {
 			world.remove<UiTreeChanged>();
 		});
 
+	world.system<GlobalTransform, Image, Aabb>()
+		.kind(Phases::Update)
+		.each([](GlobalTransform& transform, Image& image, Aabb& aabb) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + image.texture->get_size();
+		});
+
+	world.system<GlobalTransform, Node, Aabb>()
+		.with<BackgroundColor>()
+		.without<Image>()
+		.without<Text>()
+		.kind(Phases::Update)
+		.each([](GlobalTransform& transform, Node& node, Aabb& aabb) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + node.size;
+		});
+
+	world.system<GlobalTransform, TextData, Aabb>()
+		.kind(Phases::Update)
+		.each([](GlobalTransform& transform, TextData& text_data, Aabb& aabb) {
+			aabb.min = transform.translation;
+			aabb.max = glm::vec2(transform.translation) + glm::vec2(text_data.size);
+		});
+
 	world.system<const Node, Interaction, const FocusStrategy, const GlobalTransform>("focus interaction")
 		.kind(Phases::Update)
 		.order_by<Node>([](flecs::entity_t e1, const Node* n1, flecs::entity_t e2, const Node* n2) {

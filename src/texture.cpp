@@ -4,7 +4,7 @@ using namespace ps;
 
 Texture::Texture(SDL_GPUDevice* gpu, SDL_GPUTexture* texture, const glm::vec2& size) : m_gpu(gpu), m_texture(texture), m_size(size) {}
 
-Texture::Texture(SDL_GPUDevice* gpu, const glm::uvec2& size, Color color, SDL_GPUTextureFormat format) {
+Texture::Texture(SDL_GPUDevice* gpu, glm::uvec2 size, Color color, SDL_GPUTextureFormat format) {
 	auto texture_create_info = SDL_GPUTextureCreateInfo{
 		.format = format,
 		.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,

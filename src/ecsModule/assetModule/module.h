@@ -5,9 +5,11 @@
 #include "texture.h"
 #include "font.h"
 
+#include <filesystem>
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace ps {
 	class AssetStorage {

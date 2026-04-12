@@ -2,16 +2,20 @@
 
 #include "assetModule/module.h"
 #include "ecsModule/debug_module/module.h"
+#include "ecsModule/render_module/module.h"
 #include "transformModule/module.h"
 #include "cameraModule/module.h"
-#include "renderModule/module.h"
+//#include "renderModule/module.h"
 #include "textModule/module.h"
+#include "text_render_module/module.h"
 #include "spriteModule/module.h"
+#include "sprite_render_module/module.h"
 #include "meshModule/module.h"
 #include "inputModule/module.h"
 #include "ui_module/module.h"
-#include "ui_render_module/module.h"
+#include "ui_render_module_new/module.h"
 #include "windowModule/module.h"
+#include "windowModule/components.h"
 
 using namespace ps;
 
@@ -209,8 +213,8 @@ DefaultModules::DefaultModules(flecs::world& world) {
 		.opaque(std_vector_support<SDL_FRect>);
 
 	world.component<TextureAtlas>()
-		.member<std::vector<SDL_FRect>>("textures")
-		.member<size_t>("current_index");
+		.member("rect", &TextureAtlas::rects)
+		.member("current_index", &TextureAtlas::current_index);
 
 	world.component<std::optional<TextureAtlas>>()
 		.opaque(std_optional_support<TextureAtlas>);
@@ -231,8 +235,10 @@ DefaultModules::DefaultModules(flecs::world& world) {
 	world.import<CameraModule>();
 	world.import<RenderModule>();
 	world.import<SpriteModule>();
+	world.import<SpriteRenderModule>();
 	world.import<TextModule>();
-	world.import<MeshModule>();
+	world.import<TextRenderModule>();
+	//world.import<MeshModule>();
 	world.import<InputModule>();
 	world.import<UiModule>();
 	world.import<UiRenderModule>();

@@ -51,9 +51,17 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/assetModule/module.cpp
 	src/ecsModule/ui_module/module.h
 	src/ecsModule/ui_module/module.cpp
-	src/ecsModule/ui_render_module/components.h
-	src/ecsModule/ui_render_module/module.h
-	src/ecsModule/ui_render_module/module.cpp
+	#src/ecsModule/ui_render_module/components.h
+	#src/ecsModule/ui_render_module/module.h
+	#src/ecsModule/ui_render_module/module.cpp
+	src/ecsModule/ui_render_module_new/offsets.h
+	src/ecsModule/ui_render_module_new/components.h
+	src/ecsModule/ui_render_module_new/module.h
+	src/ecsModule/ui_render_module_new/module.cpp
+	src/ecsModule/ui_render_module_new/node_helpers.h
+	src/ecsModule/ui_render_module_new/node_helpers.cpp
+	src/ecsModule/ui_render_module_new/text_helpers.h
+	src/ecsModule/ui_render_module_new/text_helpers.cpp
 	#src/ecsModule/common.h
 	#src/ecsModule/uiModule/module.h
 	#src/ecsModule/uiModule/module.cpp
@@ -75,12 +83,22 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/windowModule/module.cpp
 	#src/ecsModule/sceneModule/module.h
 	#src/ecsModule/sceneModule/module.cpp
-	src/ecsModule/renderModule/module.h
-	src/ecsModule/renderModule/module.cpp
+	#src/ecsModule/renderModule/module.h
+	#src/ecsModule/renderModule/module.cpp
+	src/ecsModule/render_module/material.h
+	src/ecsModule/render_module/render_phase.h
+	src/ecsModule/render_module/render_phase.cpp
+	src/ecsModule/render_module/module.h
+	src/ecsModule/render_module/module.cpp
 	src/ecsModule/spriteModule/module.h
 	src/ecsModule/spriteModule/module.cpp
+	src/ecsModule/sprite_render_module/module.h
+	src/ecsModule/sprite_render_module/module.cpp
 	src/ecsModule/textModule/module.h
 	src/ecsModule/textModule/module.cpp
+	src/ecsModule/text_render_module/text_vertex.h
+	src/ecsModule/text_render_module/module.h
+	src/ecsModule/text_render_module/module.cpp
 	src/ecsModule/meshModule/primitives.h
 	src/ecsModule/meshModule/primitives.cpp
 	src/ecsModule/meshModule/components.h
@@ -101,7 +119,6 @@ add_executable(${PROJECT_NAME}
 	src/file.h
 	src/file.cpp
 	src/texture_atlas.h
-	src/texture_atlas.cpp
 	src/utils/visit.h
 )
 

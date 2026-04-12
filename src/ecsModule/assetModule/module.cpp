@@ -1,7 +1,6 @@
 #include "module.h"
 
 #include "SDL3_image/SDL_image.h"
-#include "ecsModule/renderModule/module.h"
 #include "ecsModule/common.h"
 #include "spdlog/spdlog.h"
 
@@ -67,8 +66,6 @@ std::shared_ptr<Font> AssetStorage::load_font(const std::string& path, float siz
 
 AssetModule::AssetModule(flecs::world& world) {
 	world.module<AssetModule>();
-
-	world.import<RenderModule>();
 
 	world.component<AssetStorage>().add(flecs::Singleton) ;
 

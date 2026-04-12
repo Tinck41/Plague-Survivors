@@ -24,12 +24,23 @@ namespace ps {
 	struct TextFont {
 		std::shared_ptr<Font> handle;
 		float size;
+		float original_size;
 	};
 
 	struct TextColor : public Color {
 		using Color::Color;
 
 		TextColor(const Color& color) : Color(color) {}
+	};
+
+	struct TextOutline {
+		float width;
+		Color color = TRANSPARENT;
+	};
+
+	struct TextShadow {
+		glm::vec2 shift;
+		Color color = BLACK;
 	};
 
 	struct TextData {

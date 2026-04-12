@@ -22,10 +22,10 @@ namespace ps {
 		SDL_GPUBuffer* index_buffer;
 	};
 
-	struct Material {
-		SDL_GPUGraphicsPipeline* pipeline;
-		std::shared_ptr<Texture> texture;
-	};
+	//struct Material {
+	//	SDL_GPUGraphicsPipeline* pipeline;
+	//	std::shared_ptr<Texture> texture;
+	//};
 
 	struct MeshModule {
 		MeshModule(flecs::world& world);

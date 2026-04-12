@@ -298,7 +298,7 @@ SpriteModule::SpriteModule(flecs::world& world) {
 				size_t current_batch_index = 0;
 
 				for (size_t i = 0; i < phase_items.size(); ++i) {
-					const auto& render_data = phase_items[i];
+					auto& render_data = phase_items[i];
 
 					if (!sprite_items.lookup.contains(render_data.entity)) {
 						current_batch_entity = flecs::entity::null();

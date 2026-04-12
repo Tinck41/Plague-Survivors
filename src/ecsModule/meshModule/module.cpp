@@ -14,7 +14,7 @@ MeshModule::MeshModule(flecs::world& world) {
 	world.import<RenderModule>();
 
 	world.component<Mesh>();
-	world.component<Material>();
+	//world.component<Material>();
 	world.component<QuadMesh>().add(flecs::Singleton);
 
 	world.system<RenderDevice, QuadMesh>()

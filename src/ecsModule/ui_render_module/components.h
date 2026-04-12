@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ecsModule/renderModule/module.h"
 #include "ecsModule/transformModule/module.h"
 #include "SDL3/SDL.h"
 #include "SDL3_ttf/SDL_ttf.h"
@@ -107,7 +106,7 @@ namespace ps {
 	using UiTextBatches = std::unordered_map<flecs::entity_t, std::vector<UiTextBatch>>;
 	using CameraUiTextBatches = std::unordered_map<flecs::entity_t, UiTextBatches>;
 
-	struct TransparentUi : public RenderPhase {};
+	struct TransparentUi {};
 
 	using UiBatches = std::unordered_map<flecs::entity_t, UiBatch>;
 	using CameraUiBatches = std::unordered_map<flecs::entity_t, UiBatches>;

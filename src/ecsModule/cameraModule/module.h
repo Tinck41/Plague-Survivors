@@ -47,7 +47,7 @@ namespace ps {
 		glm::vec2 min;
 		glm::vec2 max;
 
-		bool is_intersect(const Aabb& other) {
+		bool is_intersect(const Aabb& other) const {
 			if (other.min == other.max) {
 				return false;
 			}

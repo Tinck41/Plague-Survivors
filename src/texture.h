@@ -8,7 +8,7 @@ namespace ps {
 	class Texture {
 	public:
 		Texture(SDL_GPUDevice* gpu, SDL_GPUTexture* texture, const glm::vec2& size);
-		Texture(SDL_GPUDevice* gpu, const glm::uvec2& size, Color color = WHITE, SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM);
+		Texture(SDL_GPUDevice* gpu, glm::uvec2 size, Color color = WHITE, SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM);
 		~Texture();
 
 		SDL_GPUTexture& get_gpu_texture() const;
