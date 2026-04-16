@@ -49,6 +49,8 @@ add_executable(${PROJECT_NAME}
 	src/dag.h
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
+	src/ecsModule/ui_module/layout.h
+	src/ecsModule/ui_module/layout.cpp
 	src/ecsModule/ui_module/module.h
 	src/ecsModule/ui_module/module.cpp
 	#src/ecsModule/ui_render_module/components.h

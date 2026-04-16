@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <set>
+#include <variant>
 #include <vector>
 
 namespace ps {
@@ -22,7 +23,42 @@ namespace ps {
 	};
 
 	struct Node {
-		glm::vec2 size{ 0.f, 0.f };
+		enum class GrowDirection : std::uint8_t {
+			Horizontal,
+			Vertical,
+		};
+
+		struct Fixed {
+			float value;
+		};
+
+		struct Fit {
+			std::optional<float> min;
+			std::optional<float> max;
+		};
+
+		struct Grow {
+			std::optional<float> min;
+			std::optional<float> max;
+		};
+
+		using SizePolicy = std::variant<Fixed, Fit, Grow>;
+
+		std::pair<SizePolicy, SizePolicy> sizing_policy = { Fit{}, Fit{} };
+		std::pair<std::optional<float>, std::optional<float>> self_alignment;
+
+		std::optional<float> test;
+
+		glm::vec2 pos;
+		glm::vec2 size;
+		glm::vec2 child_alignment;
+		glm::vec2 child_gap;
+		glm::vec2 offsets;
+		glm::vec4 margin; // l, r, t, b
+		glm::vec4 padding; // l, r, t, b
+
+		GrowDirection grow_direction = GrowDirection::Horizontal;
+
 		size_t stack_index = 0;
 	};
 

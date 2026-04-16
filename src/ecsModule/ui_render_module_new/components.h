@@ -5,7 +5,6 @@
 #include "flecs.h"
 #include "texture.h"
 
-#include <unordered_map>
 #include <vector>
 #include <memory>
 

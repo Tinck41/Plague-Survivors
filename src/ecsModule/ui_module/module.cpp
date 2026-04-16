@@ -5,7 +5,11 @@
 #include "ecsModule/utils.h"
 #include "ecsModule/transformModule/module.h"
 #include "ecsModule/textModule/module.h"
+#include "ecsModule/windowModule/module.h"
+#include "font.h"
+#include "layout.h"
 
+#include <algorithm>
 #include <vector>
 
 using namespace ps;
@@ -17,6 +21,9 @@ UiModule::UiModule(flecs::world& world) {
 	world.import<InputModule>();
 	world.import<TextModule>();
 	world.import<CameraModule>();
+
+	world.component<LayoutComposer>()
+		.add(flecs::Singleton);
 
 	world.component<NodeVector>()
 		.add(flecs::Singleton);
@@ -30,9 +37,32 @@ UiModule::UiModule(flecs::world& world) {
 	world.component<BackgroundColor>()
 		.is_a<Color>();
 
+	world.component<Node::Grow>()
+		.member("min", &Node::Grow::min)
+		.member("max", &Node::Grow::max);
+
+	world.component<Node::Fit>()
+		.member("min", &Node::Grow::min)
+		.member("max", &Node::Grow::max);
+
+	world.component<Node::Fixed>()
+		.member("value", &Node::Fixed::value);
+
+	world.component<Node::GrowDirection>()
+		.constant("Vertical", Node::GrowDirection::Vertical)
+		.constant("Horizontal", Node::GrowDirection::Horizontal);
+
 	world.component<Node>()
-		.member<glm::vec2>("size")
-		.member<size_t>("stack_index")
+		.member("sizing_policy", &Node::sizing_policy)
+		.member("self_alignment", &Node::self_alignment)
+		.member("test", &Node::test)
+		.member("size", &Node::size)
+		.member("child_alignment", &Node::child_alignment)
+		.member("stack_index", &Node::stack_index)
+		.member("child_gap", &Node::child_gap)
+		.member("margin", &Node::margin)
+		.member("padding", &Node::padding)
+		.member("grow_direction", &Node::grow_direction)
 		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<Aabb>())
 		.add(flecs::With, world.component<Visible2d>())
@@ -85,6 +115,15 @@ UiModule::UiModule(flecs::world& world) {
 			world.add<UiTreeChanged>();
 		});
 
+	world.observer()
+		.with(flecs::Disabled)
+		.with<Node>().filter()
+		.event(flecs::OnAdd)
+		.event(flecs::OnRemove)
+		.each([&world]() {
+			world.add<UiTreeChanged>();
+		});
+
 	world.observer<Node>()
 		.event(flecs::OnAdd)
 		.with(flecs::ChildOf, flecs::Wildcard)
@@ -99,8 +138,23 @@ UiModule::UiModule(flecs::world& world) {
 			render_layers.mask = RenderLayers::UI;
 		});
 
+	world.system<Node, WindowModule>()
+		.without<Node>().parent()
+		.kind(Phases::Update)
+		.each([](Node& node, WindowModule& module) {
+			glm::ivec2 window_size;
+
+			SDL_GetWindowSize(module.main_window, &window_size.x, &window_size.y);
+
+			if (std::holds_alternative<Node::Fixed>(node.sizing_policy.first)) {
+				std::get<Node::Fixed>(node.sizing_policy.first).value = static_cast<float>(window_size.x);
+			}
+			if (std::holds_alternative<Node::Fixed>(node.sizing_policy.second)) {
+				std::get<Node::Fixed>(node.sizing_policy.second).value = static_cast<float>(window_size.y);
+			}
+		});
+
 	world.system<NodeVector>()
-		.with<UiTreeChanged>()
 		.with<Node>()
 		.without(flecs::ChildOf, flecs::Wildcard) // TODO: SceneRoot in future
 		.kind(Phases::PreUpdate)
@@ -110,6 +164,10 @@ UiModule::UiModule(flecs::world& world) {
 			node_vector.sorted_nodes.clear();
 
 			utils::dfs(e, [&index, &node_vector](flecs::entity child) {
+				if (!child.enabled()) {
+					return;
+				}
+
 				child.get_ref<Node>()->stack_index = ++index;
 				node_vector.sorted_nodes.emplace_back(child);
 			});
@@ -187,5 +245,126 @@ UiModule::UiModule(flecs::world& world) {
 			}
 		});
 
+	world.system<LayoutComposer>()
+		.kind(Phases::Update)
+		.each([](LayoutComposer& composer) {
+			composer.clear();
+		});
+
+	world.system<Node*, Node, Text*, TextFont*, TextData*, Transform, LayoutComposer>()
+		.term_at(0).parent()
+		.cascade()
+		.kind(Phases::Update)
+		.each([](Node* parent, Node& child, Text* text, TextFont* text_font, TextData* text_data, Transform& transform, LayoutComposer& composer) {
+			const auto size = [&] {
+				if (text_data) {
+					return glm::vec2(text_data->size);
+				}
+
+				glm::vec2 size = {};
+
+				if (std::holds_alternative<Node::Fixed>(child.sizing_policy.first)) {
+					size.x = std::get<Node::Fixed>(child.sizing_policy.first).value;
+				}
+				if (std::holds_alternative<Node::Fixed>(child.sizing_policy.second)) {
+					size.y = std::get<Node::Fixed>(child.sizing_policy.second).value;
+				}
+
+				return size;
+			}();
+
+			const auto min_size = [&] {
+				std::pair<std::optional<float>, std::optional<float>> size;
+
+				if (text_data) {
+					size.first = text_data->min_width;
+				}
+				else if (std::holds_alternative<Node::Fit>(child.sizing_policy.first)) {
+					size.first = std::get<Node::Fit>(child.sizing_policy.first).min;
+				}
+				else if (std::holds_alternative<Node::Grow>(child.sizing_policy.first)) {
+					size.first = std::get<Node::Grow>(child.sizing_policy.first).min;
+				}
+
+				if (std::holds_alternative<Node::Fit>(child.sizing_policy.second)) {
+					size.second = std::get<Node::Fit>(child.sizing_policy.second).min;
+				}
+				else if (std::holds_alternative<Node::Grow>(child.sizing_policy.second)) {
+					size.second = std::get<Node::Grow>(child.sizing_policy.second).min;
+				}
+
+				return size;
+			}();
+
+			const auto max_size = [&child] {
+				std::pair<std::optional<float>, std::optional<float>> size;
+
+				if (std::holds_alternative<Node::Fit>(child.sizing_policy.first)) {
+					size.first = std::get<Node::Fit>(child.sizing_policy.first).max;
+				}
+				else if (std::holds_alternative<Node::Grow>(child.sizing_policy.first)) {
+					size.first = std::get<Node::Grow>(child.sizing_policy.first).max;
+				}
+
+				if (std::holds_alternative<Node::Fit>(child.sizing_policy.second)) {
+					size.second = std::get<Node::Fit>(child.sizing_policy.second).max;
+				}
+				else if (std::holds_alternative<Node::Grow>(child.sizing_policy.second)) {
+					size.second = std::get<Node::Grow>(child.sizing_policy.second).max;
+				}
+
+				return size;
+			}();
+
+			auto layout_node = LayoutNode{
+				.parent_stack_index = (!parent ? child.stack_index: parent->stack_index) + 1,
+				.stack_index = child.stack_index + 1,
+				.horizontal = child.grow_direction == Node::GrowDirection::Horizontal,
+				.size = size,
+				.child_alignment = child.child_alignment,
+				.pos = !parent ? transform.translation : glm::vec3{},
+				.child_gap = child.child_gap,
+				.padding = child.padding,
+				.fixed = { std::holds_alternative<Node::Fixed>(child.sizing_policy.first), std::holds_alternative<Node::Fixed>(child.sizing_policy.second) },
+				.grow = { std::holds_alternative<Node::Grow>(child.sizing_policy.first), std::holds_alternative<Node::Grow>(child.sizing_policy.second) },
+				.fit = { std::holds_alternative<Node::Fit>(child.sizing_policy.first), std::holds_alternative<Node::Fit>(child.sizing_policy.second) },
+				.self_alignment = child.self_alignment,
+				.min_size = min_size,
+				.max_size = max_size
+			};
+
+			if (text && text_font && text_data) {
+				layout_node.text_data = {
+					.text = static_cast<std::string>(*text),
+					.font = text_font->handle->get_resource(),
+					.font_scale = text_font->font_scale,
+				};
+			}
+
+			composer.push_node(std::move(layout_node));
+		});
+
+	world.system<LayoutComposer>()
+		.kind(Phases::Update)
+		.each([](LayoutComposer& composer) {
+			composer.build();
+		});
+
+	world.system<Node, Transform, const LayoutComposer>()
+		.kind(Phases::Update)
+		.each([](flecs::entity entity, Node& node, Transform& transform, const LayoutComposer& composer) {
+			const auto& layout = composer[node.stack_index + 1];
+
+			if (layout.text_data) {
+				entity.set<TextComputed>({
+					.computed_text = layout.text_data.value().text
+				});
+			}
+
+			transform.translation = glm::vec3(layout.pos, 0.f);
+			node.size = layout.size;
+		});
+
 	world.add<NodeVector>();
+	world.add<LayoutComposer>();
 }
