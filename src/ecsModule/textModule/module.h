@@ -15,16 +15,23 @@
 namespace ps {
 	class Font;
 
+	struct InitText {};
+
 	struct Text2d : public std::string {
 		using std::string::string;
 
 		Text2d(std::string string) : std::string(std::move(string)) {}
 	};
 
+	struct TextComputed {
+		std::string computed_text;
+	};
+
 	struct TextFont {
 		std::shared_ptr<Font> handle;
 		float size;
-		float original_size;
+		float font_scale;
+		glm::ivec2 font_dpi;
 	};
 
 	struct TextColor : public Color {
@@ -45,6 +52,7 @@ namespace ps {
 
 	struct TextData {
 		glm::ivec2 size;
+		float min_width;
 
 		TTF_Text* ttf_data;
 	};

@@ -89,8 +89,15 @@ TextModule::TextModule(flecs::world& world) {
 		.member("shift", &TextShadow::shift)
 		.member("color", &TextShadow::color);
 
+	world.component<InitText>();
+
+	world.component<TextComputed>()
+		.member("computed_text", &TextComputed::computed_text);
+
 	world.component<Text2d>()
 		.is_a<std::string>()
+		.add(flecs::With, world.component<InitText>())
+		.add(flecs::With, world.component<TextComputed>())
 		.add(flecs::With, world.component<RenderLayers>())
 		.add(flecs::With, world.component<Aabb>())
 		.add(flecs::With, world.component<Visible2d>())
@@ -98,6 +105,24 @@ TextModule::TextModule(flecs::world& world) {
 		.add(flecs::With, world.component<TextFont>())
 		.add(flecs::With, world.component<TextColor>())
 		.add(flecs::With, world.component<Transform>());
+
+	world.observer<TextFont>()
+		.event(flecs::OnSet)
+		.each([](flecs::entity entity, TextFont& font) {
+			if (font.handle) {
+				font.font_scale = font.size / font.handle->get_size();
+
+				TTF_GetFontDPI(font.handle->get_resource(), &font.font_dpi.x, &font.font_dpi.y);
+
+				entity.add<InitText>();
+			}
+		});
+
+	world.observer<TextComputed>()
+		.event(flecs::OnSet)
+		.each([](flecs::entity entity, TextComputed&) {
+			entity.add<InitText>();
+		});
 
 	//world.system<RenderDevice, TextPipeline>()
 	//	.kind(Phases::OnStart)

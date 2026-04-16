@@ -1,5 +1,6 @@
 #include "module.h"
 
+#include "ecsModule/common.h"
 #include "text_vertex.h"
 #include "ecsModule/cameraModule/module.h"
 #include "ecsModule/render_module/module.h"
@@ -19,23 +20,55 @@ TextRenderModule::TextRenderModule(flecs::world& world) {
 
 	world.import<RenderModule>();
 
-	world.observer<Text2d, TextData, TextFont>()
-		.event(flecs::OnSet)
-		.each([&](flecs::entity e, Text2d& text, TextData& data, TextFont& font){
+	world.system<Text2d, TextComputed, TextFont, TextData>("init text 2d")
+		.with<InitText>()
+		.kind(Phases::Update)
+		.each([&](flecs::entity entity, Text2d& text, TextComputed& computed, TextFont& font, TextData& data) {
 			if (!font.handle) {
 				return;
 			}
 
+			const auto actual_text = [&] {
+				if (!computed.computed_text.empty()) {
+					return computed.computed_text;
+				}
+
+				return static_cast<std::string>(text);
+			}();
+
+			const auto calculate_min_size = [&]() {
+				size_t word_begin_index = 0;
+
+				for (size_t i = 0; i < actual_text.size(); ++i) {
+					if (actual_text[i] != ' ' || actual_text[i] != '\n') {
+						continue;
+					}
+
+					int width;
+
+					TTF_GetStringSize(font.handle->get_resource(), actual_text.c_str() + word_begin_index, i - word_begin_index, &width, nullptr);
+
+					data.min_width = std::max(data.min_width, static_cast<float>(width));
+					word_begin_index = i;
+				}
+
+				data.min_width *= font.font_scale;
+			};
+
 			if (!data.ttf_data) {
 				data.ttf_data = TTF_CreateText(engine, *font.handle, text.c_str(), text.size());
+				calculate_min_size();
 			}
 			else {
 				TTF_SetTextString(data.ttf_data, text.c_str(), text.size());
+				calculate_min_size();
 			}
 
 			TTF_GetTextSize(data.ttf_data, &data.size.x, &data.size.y);
 
-			data.size = glm::vec2(data.size) * (font.size / font.handle->get_size());
+			data.size = glm::vec2(data.size) * font.font_scale;
+
+			entity.remove<InitText>();
 		});
 
 	world.observer<Text2d, TextData>()
@@ -261,7 +294,7 @@ RenderPhaseExtractor ps::create_text_extractor(flecs::world& world, flecs::entit
 							seq->atlas_texture,
 							transform.translation,
 							transform.scale,
-							font.size / font.original_size,
+							font.font_scale,
 							color,
 							outline_width,
 							outline_color,
