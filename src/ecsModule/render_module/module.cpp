@@ -114,7 +114,11 @@ void render(flecs::iter& it) {
 		//	return;
 		//}
 
-		assert(SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer, window.handle, &window.swapchain_texture, nullptr, nullptr) && SDL_GetError());
+		SDL_AcquireGPUSwapchainTexture(command_buffer, window.handle, &window.swapchain_texture, nullptr, nullptr);
+
+		if (!window.swapchain_texture) {
+			return;
+		}
 
 		auto color_target = SDL_GPUColorTargetInfo{
 			.texture = window.swapchain_texture,
@@ -151,6 +155,10 @@ void render(flecs::iter& it) {
 			});
 
 			if (!render_texture) {
+				for (const auto& phase : render_phases) {
+					world.entity(phase).get_mut<RenderPhase>().items.clear();
+				}
+
 				continue;
 			}
 
