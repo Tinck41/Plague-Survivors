@@ -169,7 +169,7 @@ Material ps::create_text_material(flecs::world& world) {
 	SDL_GPUSamplerCreateInfo sampler_info = {
 		.min_filter = SDL_GPU_FILTER_LINEAR,
 		.mag_filter = SDL_GPU_FILTER_LINEAR,
-		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
 		.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 		.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 		.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE
@@ -353,6 +353,7 @@ RenderPhaseUploader ps::create_text_uploader() {
 
 					data.texture = seq->atlas_texture;
 					data.num_instances = 1;
+					data.first_index = index_count;
 				}
 
 				while (seq) {

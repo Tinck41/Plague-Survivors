@@ -25,19 +25,19 @@ float4 main(Input input) : SV_Target {
 
 	// outline зона (чуть снаружи границы)
 	float outline = smoothstep(
-		0.5 - input.outline_width - outline_soft,
-		0.5 - input.outline_width + outline_soft,
+		0.35 - input.outline_width - outline_soft,
+		0.35 - input.outline_width + outline_soft,
 		dist
 	);
 
 	// вычитаем fill чтобы не перекрывать текст
 	outline = outline - fill;
 
-	float4 result =
-		input.color * fill +      // основной текст
-		input.outline_color * outline;  // обводка
-
-	result.a = saturate(result.a);
+	float4 result = float4(input.color.rgb, input.color.a * fill);;
+	if (input.outline_width > 0.0) {
+		result = input.color * fill + input.outline_color * outline;
+		result.a = saturate(result.a);
+	}
 
 	return result;
 }

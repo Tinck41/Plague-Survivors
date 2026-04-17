@@ -171,6 +171,7 @@ RenderPhaseUploader ps::create_text_node_uploader() {
 
 					data.texture = seq->atlas_texture;
 					data.num_instances = 1;
+					data.first_index = index_count;
 				}
 
 				while (seq) {
