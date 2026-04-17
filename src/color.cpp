@@ -49,10 +49,10 @@ Color Color::from_hex(std::string hex) {
 
 Color::operator SDL_FColor() const {
 	return {
-		static_cast<float>(r / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(g / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(b / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(a / std::numeric_limits<std::uint8_t>::max()),
+		static_cast<float>(r) / 255.f,
+		static_cast<float>(g) / 255.f,
+		static_cast<float>(b) / 255.f,
+		static_cast<float>(a) / 255.f,
 	};
 }
 
@@ -62,10 +62,10 @@ Color::operator SDL_Color() const {
 
 Color::operator glm::vec4() const {
 	return {
-		static_cast<float>(r / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(g / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(b / std::numeric_limits<std::uint8_t>::max()),
-		static_cast<float>(a / std::numeric_limits<std::uint8_t>::max()),
+		static_cast<float>(r) / 255.f,
+		static_cast<float>(g) / 255.f,
+		static_cast<float>(b) / 255.f,
+		static_cast<float>(a) / 255.f,
 	};
 }
 
