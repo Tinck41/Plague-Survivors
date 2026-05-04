@@ -4,79 +4,68 @@
 
 using namespace ps;
 
+LayoutComposer::LayoutComposer() {
+	nodes.reserve(1024);
+}
+
 void LayoutComposer::push_node(LayoutNode node) {
-	if (!node.fixed.first) {
-		node.size.x = node.min_size.first.value_or(node.size.x);
-	}
-	if (!node.fixed.second) {
-		node.size.y = node.min_size.second.value_or(node.size.y);
+	while (nodes.size() <= node.bfs_index) {
+		nodes.resize(nodes.size() * 2);
 	}
 
-	if (node.stack_index == 1) {
-		nodes.push_back(node);
+	node.first_child = nodes[node.bfs_index].first_child;
+	node.children_num = nodes[node.bfs_index].children_num;
+	nodes[node.bfs_index] = node;
 
-		return;
-	}
-
-	const auto last_node = nodes.back();
-
-	nodes.push_back(node);
-
-	if (last_node.parent == 0 || last_node.parent_stack_index != node.parent_stack_index) {
-		std::sort(nodes.begin() + nodes[last_node.parent].first_child, nodes.begin() + nodes[last_node.parent].last_child + 1, [](const LayoutNode& lhs, const LayoutNode& rhs) {
-			return lhs.stack_index < rhs.stack_index;
-		});
-
-		auto parent_it = std::ranges::find(nodes.begin() + nodes[last_node.parent].first_child, nodes.begin() + nodes[last_node.parent].last_child + 1, node.parent_stack_index, &LayoutNode::stack_index);
-
-		nodes.back().parent = std::distance(nodes.begin(), parent_it);
-
-		parent_it->first_child = nodes.size() - 1;
-		parent_it->last_child = nodes.size() - 1;
+	if (node.bfs_index != node.parent_bfs_index) {
+		if (nodes[node.parent_bfs_index].first_child == 0) {
+			nodes[node.parent_bfs_index].first_child = node.bfs_index;
+		}
+		nodes[node.parent_bfs_index].first_child = std::min(node.bfs_index, nodes[node.parent_bfs_index].first_child);
+		nodes[node.parent_bfs_index].children_num += 1;
 	}
 	else {
-		nodes.back().parent = last_node.parent == 0 ? nodes.size() - 2 : last_node.parent;
-
-		nodes[nodes.back().parent].last_child = nodes.size() - 1;
+		nodes[node.bfs_index].parent_bfs_index = 0;
 	}
+
+	if (nodes[node.bfs_index].display) {
+		if (!nodes[node.bfs_index].fixed.first) {
+			nodes[node.bfs_index].size.x = nodes[node.bfs_index].min_size.first.value_or(nodes[node.bfs_index].size.x);
+		}
+		if (!nodes[node.bfs_index].fixed.second) {
+			nodes[node.bfs_index].size.y = nodes[node.bfs_index].min_size.second.value_or(nodes[node.bfs_index].size.y);
+		}
+	}
+	else {
+		nodes[node.bfs_index].size = { 0.f, 0.f };
+	}
+
+	++nodes_num;
 }
 
 void LayoutComposer::build() {
-	const auto& last_parent = nodes[nodes.back().parent];
-
-	if ((last_parent.last_child - last_parent.first_child) >= 1 && last_parent.stack_index != 0) {
-		std::sort(
-			nodes.begin() + last_parent.first_child,
-			nodes.begin() + last_parent.last_child + 1,
-			[](const LayoutNode& lhs, const LayoutNode& rhs) {
-				return lhs.stack_index < rhs.stack_index;
-			}
-		);
-	}
-
 	calculate_fit_width();
 	calculate_grow_shrink_width();
 	wrap_text();
 	calculate_fit_height();
 	calculate_grow_shrink_height();
 	calculate_positions();
-
-	std::ranges::sort(nodes, {}, &LayoutNode::stack_index);
 }
 
 void LayoutComposer::clear() {
 	nodes.erase(nodes.begin() + 1, nodes.end());
+	nodes_num = 1;
 }
 
 void LayoutComposer::calculate_fit_width() {
 	reverse_bfs(nodes, [&](LayoutNode& node) {
-		auto& parent = nodes[node.parent];
+		auto& parent = nodes[node.parent_bfs_index];
 
 		if (node.fit.first) {
 			node.size.x += node.padding.x + node.padding.y;
 
 			if (node.horizontal) {
-				const auto child_gap = node.child_gap * static_cast<float>(node.last_child - node.first_child);
+				const auto child_gap = node.child_gap * static_cast<float>(node.children_num - 1);
 
 				node.size.x += child_gap.x;
 			}
@@ -90,18 +79,22 @@ void LayoutComposer::calculate_fit_width() {
 				parent.size.x = std::max(node.size.x, parent.size.x);
 			}
 		}
+
+		if (node.max_size.first && node.size.x > node.max_size.first.value()) {
+			node.size.x = node.max_size.first.value();
+		}
 	});
 }
 
 void LayoutComposer::calculate_fit_height() {
 	reverse_bfs(nodes, [&](LayoutNode& node) {
-		auto& parent = nodes[node.parent];
+		auto& parent = nodes[node.parent_bfs_index];
 
 		if (node.fit.second) {
 			node.size.y += node.padding.z + node.padding.w;
 
 			if (!node.horizontal) {
-				const auto child_gap = node.child_gap * static_cast<float>(node.last_child - node.first_child);
+				const auto child_gap = node.child_gap * static_cast<float>(node.children_num - 1);
 
 				node.size.y += child_gap.y;
 			}
@@ -115,39 +108,44 @@ void LayoutComposer::calculate_fit_height() {
 				parent.size.y += node.size.y;
 			}
 		}
+
+		if (node.max_size.second && node.size.y > node.max_size.second.value()) {
+			node.size.y = node.max_size.second.value();
+		}
 	});
 }
 
 void LayoutComposer::calculate_grow_shrink_width() {
 	bfs(nodes, [&](LayoutNode& node) {
-		if (node.fit.first) {
-			return;
-		}
-
 		std::vector<size_t> growable;
 		std::vector<size_t> shrinkable;
 
-		growable.reserve(node.last_child - node.first_child + 1);
-		shrinkable.reserve(node.last_child - node.first_child + 1);
+		growable.reserve(node.children_num);
+		shrinkable.reserve(node.children_num);
 
 		auto remaining_size = node.size.x;
 
 		remaining_size -= node.padding.x + node.padding.y;
 		if (node.horizontal) {
-			remaining_size -= node.child_gap.x * static_cast<float>(node.last_child - node.first_child);
+			remaining_size -= node.child_gap.x * static_cast<float>(node.children_num - 1);
 		}
 
-		for (size_t i = node.first_child; i <= node.last_child; ++i) {
+		for (size_t i = node.first_child; i < node.first_child + node.children_num; ++i) {
 			if (node.horizontal) {
 				remaining_size -= nodes[i].size.x;
 			}
 
 			if (nodes[i].grow.first) {
-				growable.push_back(i);
-				shrinkable.push_back(i);
+				if (!nodes[i].absolute) {
+					growable.push_back(i);
+					shrinkable.push_back(i);
 
-				if (!node.horizontal) {
-					nodes[i].size.x += node.size.x - node.padding.x - node.padding.y - nodes[i].size.x;
+					if (!node.horizontal) {
+						nodes[i].size.x += node.size.x - node.padding.x - node.padding.y - nodes[i].size.x;
+					}
+				}
+				else {
+					nodes[i].size.x += node.size.x - node.padding.x - node.padding.y;
 				}
 			}
 		}
@@ -161,7 +159,7 @@ void LayoutComposer::calculate_grow_shrink_width() {
 		growable.shrink_to_fit();
 		shrinkable.shrink_to_fit();
 
-		while (!growable.empty() && remaining_size > 0.f) {
+		while (!growable.empty() && remaining_size > 0.01f) {
 			auto smallest = std::numeric_limits<float>::max();
 			auto second_smallest = std::numeric_limits<float>::max();
 			auto size_to_add = remaining_size;
@@ -205,7 +203,7 @@ void LayoutComposer::calculate_grow_shrink_width() {
 			}
 		}
 
-		while (!shrinkable.empty() && remaining_size < 0.f) {
+		while (!shrinkable.empty() && remaining_size < -0.01f) {
 			auto largest = 0.f;
 			auto second_largest = 0.f;
 			auto size_to_sub = remaining_size;
@@ -255,34 +253,35 @@ void LayoutComposer::calculate_grow_shrink_width() {
 
 void LayoutComposer::calculate_grow_shrink_height() {
 	bfs(nodes, [&](LayoutNode& node) {
-		if (node.fit.second) {
-			return;
-		}
-
 		std::vector<size_t> growable;
 		std::vector<size_t> shrinkable;
 
-		growable.reserve(node.last_child - node.first_child);
-		shrinkable.reserve(node.last_child - node.first_child);
+		growable.reserve(node.children_num);
+		shrinkable.reserve(node.children_num);
 
 		auto remaining_size = node.size.y;
 
 		remaining_size -= node.padding.z + node.padding.w;
 		if (!node.horizontal) {
-			remaining_size -= node.child_gap.y * static_cast<float>(node.last_child - node.first_child);
+			remaining_size -= node.child_gap.y * static_cast<float>(node.children_num - 1);
 		}
 
-		for (size_t i = node.first_child; i <= node.last_child; ++i) {
+		for (size_t i = node.first_child; i < node.first_child + node.children_num; ++i) {
 			if (!node.horizontal) {
 				remaining_size -= nodes[i].size.y;
 			}
 
 			if (nodes[i].grow.second) {
-				growable.push_back(i);
-				shrinkable.push_back(i);
+				if (!nodes[i].absolute) {
+					growable.push_back(i);
+					shrinkable.push_back(i);
 
-				if (node.horizontal) {
-					nodes[i].size.y += node.size.y - node.padding.z - node.padding.w - nodes[i].size.y;
+					if (node.horizontal) {
+						nodes[i].size.y += node.size.y - node.padding.z - node.padding.w - nodes[i].size.y;
+					}
+				}
+				else {
+					nodes[i].size.y += node.size.y - node.padding.z - node.padding.w;
 				}
 			}
 		}
@@ -421,8 +420,10 @@ void LayoutComposer::wrap_text() {
 					++offset;
 				}
 
-				result.append(text_data.text, first_word_index, last_word_index - first_word_index + offset);
-				result.push_back('\n');
+				if (last_word_index != first_word_index) {
+					result.append(text_data.text, first_word_index, last_word_index - first_word_index + offset);
+					result.push_back('\n');
+				}
 
 				first_word_index = last_word_index + offset;
 
@@ -443,7 +444,7 @@ void LayoutComposer::wrap_text() {
 
 void LayoutComposer::calculate_positions() {
 	bfs(nodes, [&](LayoutNode& node) {
-		auto& parent = nodes[node.parent];
+		auto& parent = nodes[node.parent_bfs_index];
 
 		node.offsets.x += node.padding.x;
 		node.offsets.y += node.padding.z;
@@ -455,54 +456,65 @@ void LayoutComposer::calculate_positions() {
 			node.offsets.y += node.remaining_size.y * node.child_alignment.y;
 		}
 
-		if (node.parent == 0) {
+		if (node.parent_bfs_index == 0) {
 			return;
 		}
 
-		node.pos.x += parent.offsets.x;
-		node.pos.y += parent.offsets.y;
+		const auto available_height = parent.size.y - parent.padding.z - parent.padding.w - node.size.y;
+		const auto available_width = parent.size.x - parent.padding.x - parent.padding.y - node.size.x;
 
-		if (parent.horizontal) {
-			const auto available_height = parent.size.y - parent.padding.z - parent.padding.w - node.size.y;
+		if (!node.absolute) {
+			node.pos.x = parent.offsets.x;
+			node.pos.y = parent.offsets.y;
 
-			parent.offsets.x += node.size.x + parent.child_gap.x;
+			if (parent.horizontal) {
+				parent.offsets.x += node.size.x + parent.child_gap.x;
 
-			if (node.self_alignment.second) {
-				node.pos.y += (available_height) * node.self_alignment.second.value();
+				if (node.self_alignment.second) {
+					node.pos.y += (available_height) * node.self_alignment.second.value();
+				}
+				else {
+					node.pos.y += (available_height) * parent.child_alignment.y;
+				}
 			}
 			else {
-				node.pos.y += (available_height) * parent.child_alignment.y;
+				parent.offsets.y += node.size.y + parent.child_gap.y;
+
+				if (node.self_alignment.first) {
+					node.pos.x += (available_width) * node.self_alignment.first.value();
+				}
+				else {
+					node.pos.x += (available_width) * parent.child_alignment.x;
+				}
 			}
 		}
-		else {
-			const auto available_width = parent.size.x - parent.padding.x - parent.padding.y - node.size.x;
 
-			parent.offsets.y += node.size.y + parent.child_gap.y;
+		if (node.self_alignment.first) {
+			node.pos.x = (available_width) * node.self_alignment.first.value();
+		}
 
-			if (node.self_alignment.first) {
-				node.pos.x += (available_width) * node.self_alignment.first.value();
-			}
-			else {
-				node.pos.x += (available_width) * parent.child_alignment.x;
-			}
+		if (node.self_alignment.second) {
+			node.pos.y = (available_height) * node.self_alignment.second.value();
 		}
 	});
 }
 
 void LayoutComposer::bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback) {
-	for (size_t i = 1; i < nodes.size(); ++i) {
+	for (size_t i = 1; i < nodes_num; ++i) {
+		if (!nodes[i].display) {
+			continue;
+		}
 		callback(nodes[i]);
 	}
 }
 
 void LayoutComposer::reverse_bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback) {
-	for (size_t i = nodes.size() - 1; i > 0; --i) {
+	for (size_t i = nodes_num - 1; i > 0; --i) {
+		if (!nodes[i].display) {
+			continue;
+		}
 		callback(nodes[i]);
 	}
-}
-
-size_t LayoutComposer::get_children_count(size_t parent) {
-	return nodes[parent].last_child - nodes[parent].first_child + 1;
 }
 
 bool LayoutComposer::has_children(size_t parent) {

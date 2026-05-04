@@ -8,10 +8,16 @@
 namespace ps {
 	struct UiVertex {
 		glm::vec3 position;
-		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f};
 		glm::vec2 uv;
-		
+		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f};
+
 		std::uint32_t flags;
+
+		glm::vec2 size;
+		float border_radius;
+		glm::vec4 border_color{ 1.f, 1.f, 1.f, 1.f};
+		float border_width;
+		glm::vec2 local_pos;
 	};
 
 	enum class ShaderFlags : std::uint8_t {

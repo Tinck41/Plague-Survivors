@@ -17,10 +17,10 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 
 	text_engine = world.get<TextRenderModule>().engine;
 
-	world.system<Text, TextComputed, TextData, TextFont>("init text node")
+	world.system<Node, Text, TextComputed, TextData, TextFont>("init text node")
 		.with<InitText>()
 		.kind(Phases::Update)
-		.each([&](flecs::entity entity, Text& text, TextComputed& computed, TextData& data, TextFont& font){
+		.each([&](flecs::entity entity, Node& node, Text& text, TextComputed& computed, TextData& data, TextFont& font){
 			if (!font.handle) {
 				return;
 			}
@@ -37,7 +37,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 				size_t word_begin_index = 0;
 
 				for (size_t i = 0; i < actual_text.size(); ++i) {
-					if (actual_text[i] != ' ' || actual_text[i] != '\n') {
+					if (actual_text[i] != ' ' && actual_text[i] != '\n'&& i != actual_text.size() - 1) {
 						continue;
 					}
 
@@ -66,6 +66,7 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 			TTF_GetStringSize(font.handle->get_resource(), text.c_str(), text.length(), &data.size.x, &data.size.y);
 
 			data.size = glm::vec2(data.size) * font.font_scale;
+			node.sizing_policy = { Node::Grow{ .min = data.min_width, .max = data.size.x }, Node::Grow{ .min = data.size.y } };
 
 			entity.remove<InitText>();
 		});

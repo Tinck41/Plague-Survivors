@@ -1,6 +1,7 @@
 #include "text_helpers.h"
 
 #include "components.h"
+#include "ecsModule/render_module/module.h"
 #include "ecsModule/ui_render_module_new/offsets.h"
 #include "font.h"
 #include "SDL3_ttf/SDL_ttf.h"
@@ -18,6 +19,7 @@ using namespace ps;
 RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto text_query = world.query_builder()
 		.with<const Node>()
+		.with<const NodeIndex>()
 		.with<const Text>()
 		.with<const TextFont>()
 		.with<const TextColor>()
@@ -27,6 +29,7 @@ RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::
 		.with<const GlobalTransform>()
 		.with<const Aabb>()
 		.with<const Material>().optional()
+		.with<const ClipContent>().optional()
 		.with<ExtractedTextNodes>().src("$helper").inout()
 		.with<RenderPhase>().src("$phase_entity").inout()
 		.with<Aabb>().src("$camera").inout()
@@ -38,36 +41,39 @@ RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::
 
 			while (it.next()) {
 				auto node_field = it.field<const Node>(0);
-				auto text_field = it.field<const Text>(1);
-				auto font_field = it.field<const TextFont>(2);
-				auto color_field = it.field<const TextColor>(3);
-				auto outline_field = it.field<const TextOutline>(4);
-				auto shadow_field = it.field<const TextShadow>(5);
-				auto data_field = it.field<const TextData>(6);
-				auto transform_field = it.field<const GlobalTransform>(7);
-				auto aabb_field = it.field<const Aabb>(8);
+				auto stack_index_field = it.field<const NodeIndex>(1);
+				auto text_field = it.field<const Text>(2);
+				auto font_field = it.field<const TextFont>(3);
+				auto color_field = it.field<const TextColor>(4);
+				auto outline_field = it.field<const TextOutline>(5);
+				auto shadow_field = it.field<const TextShadow>(6);
+				auto data_field = it.field<const TextData>(7);
+				auto transform_field = it.field<const GlobalTransform>(8);
+				auto aabb_field = it.field<const Aabb>(9);
 
-				auto& extracted_texts = it.field<ExtractedTextNodes>(10)[0];
-				auto& render_phase = it.field<RenderPhase>(11)[0];
-				auto& camera_aabb = it.field<Aabb>(12)[0];
+				auto& extracted_texts = it.field<ExtractedTextNodes>(12)[0];
+				auto& render_phase = it.field<RenderPhase>(13)[0];
+				auto& camera_aabb = it.field<Aabb>(14)[0];
 
 				for (auto i : it) {
-					if (!camera_aabb.is_intersect(aabb_field[i])) {
+					if (!camera_aabb.is_intersect(aabb_field[i]) || !node_field[i].display) {
 						continue;
 					}
 
 					const auto entity = it.entity(i);
 
 					const auto& node = node_field[i];
+					const auto& stack_index = stack_index_field[i].dfs;
 					const auto& text = text_field[i];
 					const auto& font = font_field[i];
 					const auto& color = color_field[i];
 					const auto& data = data_field[i];
 					const auto& transform = transform_field[i];
 
-					const auto material_id = it.is_set(9) ? entity : helper;
+					const auto material_id = it.is_set(10) ? entity : helper;
+					const auto scissor = it.is_set(11) ? it.field<const ClipContent>(11)[i] : std::optional<SDL_Rect>{};
 					const auto [outline_width, outline_color] = [&] {
-						if (it.is_set(4)) {
+						if (it.is_set(5)) {
 							const auto& outline_data = outline_field[i];
 
 							return std::pair{ outline_data.width, outline_data.color };
@@ -87,8 +93,8 @@ RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::
 							continue;
 						}
 
-						if (it.is_set(5)) {
-							render_phase.items.emplace_back(entity, helper, material_id,extracted_texts.size(), node.stack_index + node_offsets::TEXT_SHADOW);
+						if (it.is_set(6)) {
+							render_phase.items.emplace_back(entity, helper, material_id,extracted_texts.size(), stack_index + node_offsets::TEXT_SHADOW, scissor);
 
 							extracted_texts.emplace_back(
 								entity,
@@ -104,7 +110,7 @@ RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::
 							);
 						}
 
-						render_phase.items.emplace_back(entity, helper, material_id,extracted_texts.size(), node.stack_index + node_offsets::TEXT);
+						render_phase.items.emplace_back(entity, helper, material_id,extracted_texts.size(), stack_index + node_offsets::TEXT, scissor);
 
 						extracted_texts.emplace_back(
 							entity,

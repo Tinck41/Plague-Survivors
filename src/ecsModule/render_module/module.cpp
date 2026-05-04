@@ -230,6 +230,12 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.component<RenderStats>()
 		.add(flecs::Singleton);
 
+	world.component<ClipContent>()
+		.member("x", &ClipContent::x)
+		.member("y", &ClipContent::y)
+		.member("width", &ClipContent::w)
+		.member("height", &ClipContent::h);
+
 	world.observer<RenderDevice>()
 		.event(flecs::OnSet)
 		.each([&world](RenderDevice& render_device) {
@@ -298,6 +304,7 @@ RenderPhaseRenderer ps::create_default_renderer() {
 
 			for (size_t i = 0; i < phase_items.size();) {
 				const auto& item = phase_items[i];
+				const auto scissor = item.scissor.value_or(SDL_Rect{0, 0, default_uniform.viewport.x, default_uniform.viewport.y });
 
 				if (item.num_indices == 0) {
 					auto entity = world.entity(item.entity);
@@ -305,6 +312,8 @@ RenderPhaseRenderer ps::create_default_renderer() {
 					i += item.batch_size > 0 ? item.batch_size : 1;
 					continue;
 				}
+
+				SDL_SetGPUScissor(render_pass, &scissor);
 
 				if (item.context_entity != last_context) {
 					context = &world.entity(item.context_entity).get<PhaseContext>();

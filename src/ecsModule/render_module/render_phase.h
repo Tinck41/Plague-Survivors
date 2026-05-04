@@ -50,6 +50,8 @@ namespace ps {
 
 		float sort_value;
 
+		std::optional<SDL_Rect> scissor;
+
 		SDL_GPUTexture* texture;
 
 		std::uint32_t num_indices = 0;

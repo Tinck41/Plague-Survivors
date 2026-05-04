@@ -25,14 +25,14 @@ Material ps::create_node_material(flecs::world& world) {
 			.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 			.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
 			.color_blend_op = SDL_GPU_BLENDOP_ADD,
-			.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+			.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
 			.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
 			.alpha_blend_op = SDL_GPU_BLENDOP_ADD,
 			.enable_blend = true,
 		}
 	};
 
-	std::array<SDL_GPUVertexAttribute, 4> vertex_attrs{
+	std::array<SDL_GPUVertexAttribute, 9> vertex_attrs{
 		SDL_GPUVertexAttribute{
 			.location = 0,
 			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
@@ -40,18 +40,43 @@ Material ps::create_node_material(flecs::world& world) {
 		},
 		SDL_GPUVertexAttribute{
 			.location = 1,
-			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-			.offset = offsetof(UiVertex, color),
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = offsetof(UiVertex, uv),
 		},
 		SDL_GPUVertexAttribute{
 			.location = 2,
-			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-			.offset = offsetof(UiVertex, uv),
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			.offset = offsetof(UiVertex, color),
 		},
 		SDL_GPUVertexAttribute{
 			.location = 3,
 			.format = SDL_GPU_VERTEXELEMENTFORMAT_UINT4,
 			.offset = offsetof(UiVertex, flags),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 4,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = offsetof(UiVertex, size),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 5,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT,
+			.offset = offsetof(UiVertex, border_radius),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 6,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			.offset = offsetof(UiVertex, border_color),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 7,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT,
+			.offset = offsetof(UiVertex, border_width),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 8,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = offsetof(UiVertex, local_pos),
 		},
 	};
 
@@ -182,6 +207,7 @@ PhaseContext ps::create_node_context(flecs::world& world) {
 RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto image_query = world.query_builder()
 		.with<Node>()
+		.with<NodeIndex>()
 		.with<Image>()
 		.with<GlobalTransform>()
 		.with<Aabb>()
@@ -198,13 +224,14 @@ RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs:
 
 			while(it.next()) {
 				auto node_field = it.field<Node>(0);
-				auto image_field = it.field<Image>(1);
-				auto transform_field = it.field<GlobalTransform>(2);
-				auto aabb_field = it.field<Aabb>(3);
+				auto stack_index_field = it.field<NodeIndex>(1);
+				auto image_field = it.field<Image>(2);
+				auto transform_field = it.field<GlobalTransform>(3);
+				auto aabb_field = it.field<Aabb>(4);
 
-				auto& extracted_nodes = it.field<ExtractedNodes>(5)[0];
-				auto& render_phase = it.field<RenderPhase>(6)[0];
-				auto& camera_aabb = it.field<Aabb>(7)[0];
+				auto& extracted_nodes = it.field<ExtractedNodes>(6)[0];
+				auto& render_phase = it.field<RenderPhase>(7)[0];
+				auto& camera_aabb = it.field<Aabb>(8)[0];
 
 				for (auto i : it) {
 					if (!camera_aabb.is_intersect(aabb_field[i])) {
@@ -214,12 +241,13 @@ RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs:
 					const auto entity = it.entity(i);
 
 					const auto& node = node_field[i];
+					const auto& stack_index = stack_index_field[i].dfs;
 					const auto& image = image_field[i];
 					const auto& transform = transform_field[i];
 
-					const auto material_id = it.is_set(4) ? entity : helper;
+					const auto material_id = it.is_set(5) ? entity : helper;
 
-					render_phase.items.emplace_back(entity, helper, material_id, extracted_nodes.size(), node.stack_index + node_offsets::IMAGE);
+					render_phase.items.emplace_back(entity, helper, material_id, extracted_nodes.size(), stack_index + node_offsets::IMAGE);
 
 					const auto [uv, size] = [&] {
 						if (image.texture_atlas) {
@@ -256,13 +284,17 @@ RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs:
 RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto color_query = world.query_builder()
 		.with<Node>()
+		.with<NodeIndex>()
+		.with<BorderColor>()
 		.with<BackgroundColor>()
 		.with<GlobalTransform>()
 		.with<Aabb>()
 		.with<Material>().optional()
+		.with<ClipContent>().optional()
 		.with<ExtractedNodes>().src("$helper").inout()
 		.with<RenderPhase>().src("$phase_entity").inout()
 		.with<Aabb>().src("$camera").inout()
+		.without<Text>()
 		.build();
 
 	return RenderPhaseExtractor{
@@ -272,13 +304,15 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 
 			while(it.next()) {
 				auto node_field = it.field<Node>(0);
-				auto color_field = it.field<BackgroundColor>(1);
-				auto transform_field = it.field<GlobalTransform>(2);
-				auto aabb_field = it.field<Aabb>(3);
+				auto stack_index_field = it.field<NodeIndex>(1);
+				auto border_color_field = it.field<BorderColor>(2);
+				auto color_field = it.field<BackgroundColor>(3);
+				auto transform_field = it.field<GlobalTransform>(4);
+				auto aabb_field = it.field<Aabb>(5);
 
-				auto& extracted_nodes = it.field<ExtractedNodes>(5)[0];
-				auto& render_phase = it.field<RenderPhase>(6)[0];
-				auto& camera_aabb = it.field<Aabb>(7)[0];
+				auto& extracted_nodes = it.field<ExtractedNodes>(8)[0];
+				auto& render_phase = it.field<RenderPhase>(9)[0];
+				auto& camera_aabb = it.field<Aabb>(10)[0];
 
 				for (auto i : it) {
 					if (!camera_aabb.is_intersect(aabb_field[i])) {
@@ -288,6 +322,8 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 					const auto entity = it.entity(i);
 
 					const auto& node = node_field[i];
+					const auto& stack_index = stack_index_field[i].dfs;
+					const auto& border_color = border_color_field[i];
 					const auto& color = color_field[i];
 					const auto& transform = transform_field[i];
 
@@ -295,9 +331,10 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 						continue;
 					}
 
-					const auto material_id = it.is_set(4) ? entity : helper;
+					const auto material_id = it.is_set(6) ? entity : helper;
+					const auto scissor = it.is_set(7) ? it.field<ClipContent>(7)[i] : std::optional<SDL_Rect>{};
 
-					render_phase.items.emplace_back(entity, helper, material_id, extracted_nodes.size(), node.stack_index + node_offsets::BACKGROUND_COLOR);
+					render_phase.items.emplace_back(entity, helper, material_id, extracted_nodes.size(), stack_index + node_offsets::BACKGROUND_COLOR, scissor);
 
 					extracted_nodes.emplace_back(
 						entity,
@@ -309,7 +346,10 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 						transform.scale,
 						color,
 						node.size,
-						glm::vec2{ 0.f, 0.f }
+						glm::vec2{ 0.f, 0.f },
+						border_color,
+						node.border_radius,
+						node.border_width
 					);
 
 				}
@@ -362,10 +402,37 @@ RenderPhaseUploader ps::create_node_uploader() {
 					flags |= static_cast<std::uint32_t>(ShaderFlags::Textured);
 				}
 
-				vertices[current_vertex + 0] = { { pos.x         , pos.y + size.y, 0.f }, color, { 0.f, 1.f }, flags };
-				vertices[current_vertex + 1] = { { pos.x + size.x, pos.y + size.y, 0.f }, color, { 1.f, 1.f }, flags };
-				vertices[current_vertex + 2] = { { pos.x + size.x, pos.y         , 0.f }, color, { 1.f, 0.f }, flags };
-				vertices[current_vertex + 3] = { { pos.x         , pos.y         , 0.f }, color, { 0.f, 0.f }, flags };
+				const auto center = pos + size * 0.5f;
+				const auto local_pos  = pos - center;
+
+				const glm::vec2 corners[4] = {
+					{ 0.f,    size.y },
+					{ size.x, size.y },
+					{ size.x, 0.f    },
+					{ 0.f,    0.f    },
+				};
+
+				const glm::vec2 uvs[4] = {
+					{ 0.f, 1.f },
+					{ 1.f, 1.f },
+					{ 1.f, 0.f },
+					{ 0.f, 0.f },
+				};
+
+				for (int i = 0; i < 4; i++) {
+					const auto local = corners[i] - size * 0.5f;
+					vertices[current_vertex + i] = {
+						{ pos.x + corners[i].x, pos.y + corners[i].y, 0.f },
+						uvs[i],
+						color,
+						flags,
+						ui_node.size,
+						ui_node.border_radius,
+						ui_node.border_color,
+						ui_node.border_width,
+						local,
+					};
+				}
 
 				current_vertex += 4;
 

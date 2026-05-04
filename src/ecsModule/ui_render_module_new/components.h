@@ -35,6 +35,9 @@ namespace ps {
 		Color color;
 		glm::vec2 size;
 		glm::vec2 uv;
+		glm::vec4 border_color;
+		float border_radius;
+		float border_width;
 	};
 
 	using ExtractedNodes = std::vector<ExtractedNode>;

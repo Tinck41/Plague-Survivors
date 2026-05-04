@@ -15,14 +15,14 @@ namespace ps {
 			float font_scale;
 		};
 
-		size_t parent = 0;
+		size_t parent_bfs_index = 0;
 		size_t first_child = 0;
-		size_t last_child = 0;
-
-		size_t parent_stack_index = 0;
-		size_t stack_index = 0;
+		size_t children_num = 0;
+		size_t bfs_index = 0;
 
 		bool horizontal;
+		bool display;
+		bool absolute;
 
 		glm::vec2 size;
 		glm::vec2 child_alignment;
@@ -46,6 +46,8 @@ namespace ps {
 
 	class LayoutComposer {
 	public:
+		LayoutComposer();
+
 		void push_node(LayoutNode node);
 		void build();
 		void clear();
@@ -62,10 +64,10 @@ namespace ps {
 		void bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback);
 		void reverse_bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback);
 
-		size_t get_children_count(size_t parent);
-
 		bool has_children(size_t parent);
 
 		std::vector<LayoutNode> nodes{ LayoutNode{} };
+
+		size_t nodes_num = 1;
 	};
 }

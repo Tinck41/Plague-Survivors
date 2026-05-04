@@ -18,14 +18,16 @@ namespace ps {
 		size_t value;
 	};
 
-	struct NodeVector {
-		std::vector<flecs::entity> sorted_nodes;
-	};
-
 	struct Node {
 		enum class GrowDirection : std::uint8_t {
 			Horizontal,
 			Vertical,
+		};
+
+		enum class Overflow : std::uint8_t {
+			Visible,
+			Clip,
+			Scroll,
 		};
 
 		struct Fixed {
@@ -45,9 +47,8 @@ namespace ps {
 		using SizePolicy = std::variant<Fixed, Fit, Grow>;
 
 		std::pair<SizePolicy, SizePolicy> sizing_policy = { Fit{}, Fit{} };
+		std::pair<Overflow, Overflow> overflow = { Overflow::Visible, Overflow::Visible };
 		std::pair<std::optional<float>, std::optional<float>> self_alignment;
-
-		std::optional<float> test;
 
 		glm::vec2 pos;
 		glm::vec2 size;
@@ -59,7 +60,16 @@ namespace ps {
 
 		GrowDirection grow_direction = GrowDirection::Horizontal;
 
-		size_t stack_index = 0;
+		bool display = true;
+		bool absolute = false;
+
+		float border_radius = 0.f;
+		float border_width = 0.f;
+	};
+
+	struct NodeIndex {
+		size_t dfs;
+		size_t bfs;
 	};
 
 	enum class Interaction {
@@ -133,6 +143,18 @@ namespace ps {
 		using Color::Color;
 
 		BackgroundColor(const Color& c) : Color(c) {}
+	};
+
+	struct BorderColor : public Color {
+		using Color::Color;
+
+		BorderColor(const Color& c) : Color(c) {}
+	};
+
+	struct TempInteraction {
+		flecs::entity entity;
+		float stack_index;
+		FocusStrategy focus_strategy;
 	};
 
 	struct UiModule {
