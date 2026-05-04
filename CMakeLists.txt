@@ -108,6 +108,16 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/meshModule/module.cpp
 	src/ecsModule/debug_module/module.h
 	src/ecsModule/debug_module/module.cpp
+	src/ecsModule/editor_module/palette.h
+	src/ecsModule/editor_module/docking.h
+	src/ecsModule/editor_module/docking.cpp
+	src/ecsModule/editor_module/window.h
+	src/ecsModule/editor_module/window.cpp
+	src/ecsModule/editor_module/functions.h
+	src/ecsModule/editor_module/functions.cpp
+	src/ecsModule/editor_module/components.h
+	src/ecsModule/editor_module/module.h
+	src/ecsModule/editor_module/module.cpp
 	src/ecsModule/default_modules.h
 	src/ecsModule/default_modules.cpp
 	#src/ecsModule/tweenModule/module.h
