@@ -437,5 +437,12 @@ UiModule::UiModule(flecs::world& world) {
 			node.size = layout.size;
 		});
 
+	world.system<Node, GlobalTransform>()
+		.without<Node>().parent()
+		.kind(Phases::PostUpdate)
+		.each([](flecs::entity entity, Node& node, GlobalTransform& transform) {
+			update_clipping(entity, transform, node, std::nullopt);
+		});
+
 	world.add<LayoutComposer>();
 }
