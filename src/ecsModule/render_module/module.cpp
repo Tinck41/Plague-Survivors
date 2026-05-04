@@ -184,6 +184,7 @@ void render(flecs::iter& it) {
 				default_uniform.view_proj = render_phase.extract_view_callback
 					? render_phase.extract_view_callback(camera, transform)
 					: extract_view_default(camera, transform);
+				default_uniform.viewport = camera.viewport;
 
 				SDL_PushGPUDebugGroup(command_buffer, std::format("phase: {}", phase_entity.name().c_str()).c_str());
 
