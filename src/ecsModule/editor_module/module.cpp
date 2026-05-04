@@ -74,9 +74,6 @@ EditorModule::EditorModule(flecs::world& world) {
 
 	world.component<NowDragged>();
 
-	world.component<DockedTo>()
-		.add(flecs::PairIsTag);
-
 	world.component<Palette>()
 		.member("bg", &Palette::bg)
 		.member("text", &Palette::text)
