@@ -15,7 +15,10 @@ namespace ps {
 		glm::mat4 matrix;
 	};
 
-	struct GlobalTransform : public Transform {};
+	struct GlobalTransform : public Transform {
+		GlobalTransform() = default;
+		GlobalTransform(Transform&& transform) : Transform(transform) {}
+	};
 
 	struct TransformModule {
 		TransformModule(flecs::world& world);
