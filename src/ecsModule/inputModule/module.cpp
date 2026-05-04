@@ -13,6 +13,18 @@ using namespace ps;
 
 int ps_key_to_sdl_key(Key key) {
 	switch(key) {
+		case Key::F1:         return SDL_SCANCODE_F1;
+		case Key::F2:         return SDL_SCANCODE_F2;
+		case Key::F3:         return SDL_SCANCODE_F3;
+		case Key::F4:         return SDL_SCANCODE_F4;
+		case Key::F5:         return SDL_SCANCODE_F5;
+		case Key::F6:         return SDL_SCANCODE_F6;
+		case Key::F7:         return SDL_SCANCODE_F7;
+		case Key::F8:         return SDL_SCANCODE_F8;
+		case Key::F9:         return SDL_SCANCODE_F9;
+		case Key::F10:        return SDL_SCANCODE_F10;
+		case Key::F11:        return SDL_SCANCODE_F11;
+		case Key::F12:        return SDL_SCANCODE_F12;
 		case Key::Space:      return SDL_SCANCODE_SPACE;
 		case Key::Apostrophe: return SDL_SCANCODE_APOSTROPHE;
 		case Key::Comma:      return SDL_SCANCODE_COMMA;
@@ -87,6 +99,18 @@ int ps_key_to_sdl_key(Key key) {
 
 Key sdl_key_to_ps_key(int key) {
 	switch(key) {
+		case SDL_SCANCODE_F1:             return Key::F1;
+		case SDL_SCANCODE_F2:             return Key::F2;
+		case SDL_SCANCODE_F3:             return Key::F3;
+		case SDL_SCANCODE_F4:             return Key::F4;
+		case SDL_SCANCODE_F5:             return Key::F5;
+		case SDL_SCANCODE_F6:             return Key::F6;
+		case SDL_SCANCODE_F7:             return Key::F7;
+		case SDL_SCANCODE_F8:             return Key::F8;
+		case SDL_SCANCODE_F9:             return Key::F9;
+		case SDL_SCANCODE_F10:            return Key::F10;
+		case SDL_SCANCODE_F11:            return Key::F11;
+		case SDL_SCANCODE_F12:            return Key::F12;
 		case SDL_SCANCODE_SPACE:          return Key::Space;
 		case SDL_SCANCODE_APOSTROPHE:     return Key::Apostrophe;
 		case SDL_SCANCODE_COMMA:          return Key::Comma;
