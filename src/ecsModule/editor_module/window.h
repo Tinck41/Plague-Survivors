@@ -39,6 +39,8 @@ namespace ps {
 	struct WindowTitlebar {};
 	struct WindowTab {};
 	struct CollapseButton {};
+	struct ResizeButton {};
+	struct ResizeButtonNode {};
 	struct WindowCollapseButton {};
 	struct WindowResizeButton {};
 
@@ -47,11 +49,18 @@ namespace ps {
 	struct CloseTarget {};
 	struct DragTarget {};
 
-	struct NowDragged {};
-
 	struct TrackCursor {
-		glm::vec2 offset;
+		glm::vec2 origin;
 	};
 
+	struct Resize {};
+	struct Drag {};
+
+	using TrackResize = flecs::pair<TrackCursor, Resize>;
+	using TrackDrag = flecs::pair<TrackCursor, Drag>;
+
 	std::pair<flecs::entity, flecs::entity> create_window(flecs::world& world, WindowConfig config);
+
+	flecs::entity create_titlebar(flecs::world& world, flecs::entity& window, WindowFlags flags);
+	flecs::entity create_tabsbar(flecs::world& world, flecs::entity& window, WindowFlags flags);
 }

@@ -68,11 +68,21 @@ EditorModule::EditorModule(flecs::world& world) {
 	world.component<WindowCollapseButton>()
 		.add(flecs::With, world.component<Button>())
 		.add(flecs::With, world.component<EditorNode>());
-	world.component<WindowResizeButton>()
+	world.component<ResizeButtonNode>()
 		.add(flecs::With, world.component<Button>())
 		.add(flecs::With, world.component<EditorNode>());
 
-	world.component<NowDragged>();
+	world.component<ResizeButton>()
+		.add(flecs::Exclusive)
+		.add(flecs::Relationship);
+
+	world.component<ResizeTarget>()
+		.add(flecs::Exclusive)
+		.add(flecs::Relationship);
+
+	world.component<TrackCursor>();
+	world.component<Resize>();
+	world.component<Drag>();
 
 	world.component<Palette>()
 		.member("bg", &Palette::bg)
@@ -250,60 +260,51 @@ EditorModule::EditorModule(flecs::world& world) {
 			}
 		});
 
-	world.system<Interaction, Input>("window resize button")
-		.with<ResizeTarget>().second("$resize_target")
+	world.system<Input>()
+		.with<TrackCursor>(flecs::Wildcard)
 		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t i, Interaction& interaction, Input& input) {
-			if (interaction == Interaction::Clicked) {
-				auto resize_target = it.get_var("resize_target");
-
-				resize_target.add<TrackCursor>();
+		.each([](flecs::entity entity, Input& input) {
+			if (input.mouse.left.released) {
+				entity.remove<TrackCursor>(flecs::Wildcard);
 			}
 		});
 
-	//world.system<Interaction, Input>("window drag button")
-	//	.with<WindowTab>()
-	//	.kind(Phases::Update)
-	//	.each([](flecs::entity entity, Interaction& interaction, Input& input) {
-	//		if (interaction == Interaction::Clicked) {
-	//			auto parent = entity.parent().parent();
-	//			auto offset = glm::vec2(parent.get<GlobalTransform>().translation) - input.mouse.position;
-
-	//			parent.set<TrackCursor>({offset});
-	//		}
-	//	});
-
-	world.system<Node, GlobalTransform, Input>("resize window")
-		.with<ResizeTarget>().second("$resize_target")
-		.with<TrackCursor>().src("$resize_target")
-		.without<NowDragged>().src("$resize_target")
-		.term_at(0).src("$resize_target")
-		.term_at(1).src("$resize_target")
+	world.system<Interaction, Input>("window resize button")
+		.with<ResizeTarget>("$resize_target")
+		.with<ResizeButtonNode>()
 		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t i, Node& node, GlobalTransform& transform, Input& input) {
-			const auto pos = glm::vec2(transform.translation);
-			const auto size = glm::vec2(input.mouse.position - pos);
+		.each([](flecs::iter& it, size_t i, Interaction& interaction, Input& input) {
+			if (interaction == Interaction::Clicked) {
 
-			const auto set_size = [](Node::SizePolicy& policy, float value) {
+				it.entity(i).set<TrackCursor, Resize>({
+					.origin = input.mouse.position,
+				});
+			}
+		});
+
+	world.system<Node, TrackResize, Input>("resize window")
+		.with<ResizeTarget>("$resize_target")
+		.term_at(0).src("$resize_target")
+		.kind(Phases::Update)
+		.each([](flecs::entity entity, Node& target_node, TrackResize track, Input& input) {
+			const auto delta = input.mouse.position - track->origin;
+
+			const auto add_size = [](Node::SizePolicy& policy, float value) {
 				visit(policy, visitors{
 					[&](Node::Fit& fit) {
-						fit.min = value;
+						fit.min = fit.min.value_or(0.f) + value;
 					},
 					[&](Node::Grow& grow) {
-						grow.min = value;
+						grow.min = grow.min.value_or(0.f) + value;
 					},
 					[&](Node::Fixed& fixed) {
-						fixed.value = value;
+						fixed.value += value;
 					}
 				});
 			};
 
-			set_size(node.sizing_policy.first, size.x);
-			set_size(node.sizing_policy.second, size.y);
-
-			if (input.mouse.left.released) {
-				it.get_var("resize_target").remove<TrackCursor>();
-			}
+			add_size(target_node.sizing_policy.first, delta.x);
+			add_size(target_node.sizing_policy.second, delta.y);
 		});
 
 	world.system<Interaction, Input>("close window button")
@@ -315,7 +316,7 @@ EditorModule::EditorModule(flecs::world& world) {
 			}
 		});
 
-	world.system<Interaction, GlobalTransform, Input, DockTree>("drag window")
+	world.system<Interaction, GlobalTransform, Input, DockTree>("drag target")
 		.with<DragTarget>("$drag_target")
 		.term_at(1).src("$drag_target")
 		.kind(Phases::Update)
@@ -326,47 +327,28 @@ EditorModule::EditorModule(flecs::world& world) {
 				const auto entity = it.entity(i);
 				const auto editor_root = it.world().lookup("editor_root");
 
-				drag_target.add<NowDragged>();
-
 				utils::insert_child_back(editor_root, drag_target);
 
-				entity.set<TrackCursor>({
-					.offset = input.mouse.position - glm::vec2(transform.translation),
+				entity.set<TrackDrag>({
+					.origin = input.mouse.position,
 				});
-
-				if (drag_target.has<DockNodeRef>()) {
-					tree.undock_window(drag_target, drag_target.get<DockNodeRef>().id);
-				}
 			}
 		});
 
-	world.system<TrackCursor, Node, Transform, Interaction, Input>("window drag")
+	world.system<Transform, TrackDrag, Input>("window drag")
 		.with<DragTarget>("$drag_target")
-		.with<NowDragged>().src("$drag_target")
-		.term_at(1).src("$drag_target")
-		.term_at(2).src("$drag_target")
+		.term_at(0).src("$drag_target")
 		.kind(Phases::Update)
-		.each([](flecs::iter& it, size_t i, TrackCursor& track, Node& node, Transform& transform, Interaction& interaction, Input& input) {
-			transform.translation = glm::vec3(input.mouse.position - track.offset, 0.f);
-			node.absolute = true;
-
-			if (input.mouse.left.released) {
-				it.entity(i).remove<TrackCursor>();
-				it.entity(i).remove<NowDragged>();
-				it.entity(i).set(FocusStrategy::Block);
-			}
+		.each([](Transform& transform, TrackDrag track, Input& input) {
+			transform.translation += glm::vec3(input.mouse.position - track->origin, 0.f);
 		});
 
-	//world.system<TrackCursor, Transform, Input>("drag window")
-	//	.with<EditorWindow>()
-	//	.kind(Phases::Update)
-	//	.each([](flecs::entity entity, TrackCursor& track, Transform& transform, Input& input) {
-	//		transform.translation = glm::vec3(input.mouse.position + track.offset, 0.f);
-
-	//		if (input.mouse.left.released) {
-	//			entity.remove<TrackCursor>();
-	//		}
-	//	});
+	world.system<TrackCursor, Input>()
+		.term_at(0).second(flecs::Wildcard)
+		.kind(Phases::Update)
+		.each([](TrackCursor& track, Input& input) {
+			track.origin = input.mouse.position;
+		});
 
 	world.system<Node, WindowModule>()
 		.with<EditorWindow>()

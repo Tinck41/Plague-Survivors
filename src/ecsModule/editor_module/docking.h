@@ -25,6 +25,7 @@ namespace ps {
 
 	struct DockNode {
 		flecs::entity preview_entity;
+		flecs::entity options_entity;
 
 		std::vector<flecs::entity> windows;
 		size_t active_window = 0;
@@ -52,6 +53,8 @@ namespace ps {
 	struct DockSpaceNode {};
 	struct DockingOption {};
 	struct DockPreview {};
+	struct DockOptions {};
+	struct DockOptionsNode {};
 	struct DockPreviewNode {};
 	struct DockingEnabled {};
 
@@ -71,6 +74,8 @@ namespace ps {
 		DockingTarget target;
 		SplitAxis split_axis;
 		DockSide dock_side;
+
+		flecs::entity dock_options_container;
 	};
 
 	class DockTree {
@@ -87,6 +92,7 @@ namespace ps {
 		void cleanup();
 
 		DockNode& get_node(DockNodeId node_id);
+		DockNode& get_root_node(DockNodeId node_id);
 
 		const std::vector<DockNodeId>& get_root_nodes() const;
 
@@ -94,6 +100,7 @@ namespace ps {
 
 	private:
 		void remove_child(DockNodeId parent, DockNodeId child);
+		void update_buttons(DockNode& root);
 
 		bool has_children(DockNodeId node_id);
 
@@ -113,6 +120,7 @@ namespace ps {
 	};
 
 	flecs::entity create_dockspace(flecs::world& world, flecs::entity window, const std::string& name);
-	flecs::entity create_dockspace_inner_preview(flecs::world& world, const DockNode& dock_node);
-	flecs::entity create_dockspace_outer_preview(flecs::world& world, const DockNode& dock_node);
+	flecs::entity create_dockspace_preview(flecs::world& world, glm::vec2 size, SplitAxis split_axis, DockSide dock_side);
+	flecs::entity create_dockspace_inner_options(flecs::world& world, const DockNode& dock_node);
+	flecs::entity create_dockspace_outer_options(flecs::world& world, const DockNode& dock_node);
 }

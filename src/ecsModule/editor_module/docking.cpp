@@ -82,6 +82,8 @@ void DockTree::dock_window(flecs::entity source, const Node& source_node, const 
 		window.set<DockNodeRef>({ other_node.id });
 	}
 
+	update_buttons(get_root_node(leaf_node.id));
+
 	update();
 }
 
@@ -95,7 +97,18 @@ void DockTree::undock_window(flecs::entity window, DockNodeId node_id) {
 	auto it = std::ranges::find(nodes[node_id].windows, window);
 
 	if (it != nodes[node_id].windows.end()) {
+		if (it->has<ResizeButton>(flecs::Any)) {
+			const auto resize_button = it->target<ResizeButton>(0);
+
+			resize_button.enable();
+			resize_button.add<ResizeTarget>(*it);
+
+			it->add<DragTarget>(*it);
+		}
+
 		nodes[node_id].windows.erase(it);
+
+		update_buttons(get_root_node(node_id));
 	}
 
 	if (nodes[node_id].windows.empty() && nodes[node_id].parent_id != 0) {
@@ -115,7 +128,7 @@ void DockTree::undock_window(flecs::entity window, DockNodeId node_id) {
 					child.size = parent.size;
 					child.position = parent.position;
 
-					if (child.parent_id == 0 && has_children(child.id)) {
+					if (child.parent_id == 0) {
 						root_node_ids.push_back(child.id);
 					}
 					else {
@@ -160,7 +173,7 @@ void DockTree::undock_window(flecs::entity window, DockNodeId node_id) {
 void DockTree::update() {
 	for (auto root : root_node_ids) {
 		bfs(root, [&](DockNode& node) {
-			if (!node.dockspace && node.parent_id == 0 && (!has_children(node.id) || !node.windows.empty())) {
+			if (!node.dockspace && node.parent_id == 0 && !has_children(node.id) && node.windows.size() <= 1) {
 				remove_ids.push_back(node.id);
 			}
 
@@ -187,7 +200,6 @@ void DockTree::update() {
 			}
 		});
 	}
-
 }
 
 void DockTree::cleanup() {
@@ -195,6 +207,15 @@ void DockTree::cleanup() {
 		auto it = std::ranges::find(root_node_ids, id);
 
 		for (const auto window : nodes[id].windows) {
+			if (window.has<ResizeButton>(flecs::Any)) {
+				const auto resize_button = window.target<ResizeButton>(0);
+
+				resize_button.enable();
+				resize_button.add<ResizeTarget>(window);
+
+				window.add<DragTarget>(window);
+			}
+
 			window.remove<DockNodeRef>();
 		}
 
@@ -209,6 +230,16 @@ void DockTree::cleanup() {
 
 DockNode& DockTree::get_node(DockNodeId id) {
 	return nodes[id];
+}
+
+DockNode& DockTree::get_root_node(DockNodeId id) {
+	auto current_id = id;
+
+	while (nodes[current_id].parent_id != 0) {
+		current_id = nodes[current_id].parent_id;
+	}
+
+	return nodes[current_id];
 }
 
 const std::vector<DockNodeId>& DockTree::get_root_nodes() const {
@@ -236,6 +267,36 @@ void DockTree::remove_child(DockNodeId parent_id, DockNodeId child_id) {
 	}
 
 	remove_ids.push_back(child_id);
+}
+
+void DockTree::update_buttons(DockNode& root) {
+	flecs::entity far_rigth_window;
+
+	dfs(root.id, [&](DockNode& node) {
+		if (node.windows.empty()) {
+			return;
+		}
+
+		for (const auto window : node.windows) {
+			window.target<ResizeButton>(0).disable();
+
+			if (!root.dockspace) {
+				window.set<DragTarget, DockNodeRef>(root.id);
+			}
+			else {
+				window.remove<DragTarget>(flecs::Wildcard);
+			}
+		}
+
+		far_rigth_window = node.windows[node.active_window];
+	});
+
+	if (!root.dockspace && far_rigth_window.is_valid()) {
+		const auto resize_button = far_rigth_window.target<ResizeButton>(0);
+
+		resize_button.enable();
+		resize_button.set<ResizeTarget, DockNodeRef>(root.id);
+	}
 }
 
 bool DockTree::has_children(DockNodeId ndoe_id) {
@@ -344,6 +405,9 @@ DockingModule::DockingModule(flecs::world& world) {
 		.member("destroy", &DockTree::destroy)
 		.add(flecs::Singleton);
 
+	using ResizeNodeTarget = flecs::pair<ResizeTarget, DockNodeRef>;
+	using DragNodeTarget = flecs::pair<DragTarget, DockNodeRef>;
+
 	world.observer<DockNodeRef, DockTree>()
 		.event(flecs::OnRemove)
 		.each([](flecs::entity entity, DockNodeRef& ref, DockTree& tree) {
@@ -351,7 +415,7 @@ DockingModule::DockingModule(flecs::world& world) {
 		});
 
 	world.system<GlobalTransform, Node, Input, DockTree>()
-		.with<DockPreviewNode>()
+		.with<DockOptionsNode>()
 		.kind(Phases::Update)
 		.each([](flecs::entity entity, GlobalTransform& transform, Node& node, Input& input, DockTree& tree) {
 			if (!tree.destroy) {
@@ -369,12 +433,13 @@ DockingModule::DockingModule(flecs::world& world) {
 		.with<EditorWindow>()
 		.with<DockingEnabled>()
 		.without<DockNodeRef>()
-		.without<NowDragged>()
+		.without<TrackDrag>()
 		.build();
 
 	world.system<Input, DockTree>()
 		.with<EditorWindow>()
-		.with<NowDragged>()
+		.with<TrackDrag>()
+		.without<DockNodeRef>()
 		.kind(Phases::Update)
 		.each([floating_window_query](flecs::entity entity, Input& input, DockTree& tree) {
 			const auto& mouse_pos = input.mouse.position;
@@ -395,14 +460,14 @@ DockingModule::DockingModule(flecs::world& world) {
 
 						if (mouse_pos.x >= transform.translation.x && mouse_pos.x <= transform.translation.x + node.size.x &&
 							mouse_pos.y >= transform.translation.y && mouse_pos.y <= transform.translation.y + node.size.y) {
-							if (!entity.has<DockPreview>(flecs::Any)) {
-								auto dock_preview_node = create_dockspace_inner_preview(world, DockNode{
+							if (!entity.has<DockOptions>(flecs::Any)) {
+								auto dock_preview_node = create_dockspace_inner_options(world, DockNode{
 									.windows = { entity },
 									.size = node.size,
 									.position = transform.translation,
 								});
 
-								entity.add<DockPreview>(dock_preview_node);
+								entity.add<DockOptions>(dock_preview_node);
 							}
 
 							collision_detected = true;
@@ -424,8 +489,8 @@ DockingModule::DockingModule(flecs::world& world) {
 
 				tree.dfs(root_id, [&](DockNode& node) {
 					if (collision_detected) {
-						if (node.preview_entity.is_valid()) {
-							node.preview_entity.destruct();
+						if (node.options_entity.is_valid()) {
+							node.options_entity.destruct();
 						}
 
 						return;
@@ -448,15 +513,15 @@ DockingModule::DockingModule(flecs::world& world) {
 
 				auto& first_node = tree.get_node(front);
 
-				if (!first_node.preview_entity.is_valid()) {
-					first_node.preview_entity = create_dockspace_outer_preview(world, first_node);
+				if (!first_node.options_entity.is_valid()) {
+					first_node.options_entity = create_dockspace_outer_options(world, first_node);
 				}
 
 				if (back != front) {
 					auto& second_node = tree.get_node(back);
 
-					if (!second_node.preview_entity.is_valid()) {
-						second_node.preview_entity = create_dockspace_inner_preview(world, second_node);
+					if (!second_node.options_entity.is_valid()) {
+						second_node.options_entity = create_dockspace_inner_options(world, second_node);
 					}
 				}
 
@@ -470,29 +535,73 @@ DockingModule::DockingModule(flecs::world& world) {
 
 	world.system<Node, Input>()
 		.with<EditorWindow>()
-		.with<NowDragged>()
+		.with<TrackDrag>()
+		.kind(Phases::Update)
 		.each([docking_options_query](flecs::entity entity, Node& node, Input& input) {
 			docking_options_query
 				.run([&input, &entity, &node](flecs::iter& it) {
 					while (it.next()) {
+						auto world = it.world();
 						auto dock_data_field = it.field<const DockData>(0);
 
 						for (auto i : it) {
+							auto option_entity = it.entity(i);
 							const auto& dock_data = dock_data_field[i];
 							const auto& interaction = it.field_at<const Interaction>(1, i);
 
-							if (interaction == Interaction::Hovered && input.mouse.left.released) {
-								it.world().get_ref<DockTree>()->dock_window(
-									entity,
-									node,
-									dock_data.target,
-									dock_data.split_axis,
-									dock_data.dock_side
-								);
+							if (interaction == Interaction::Hovered) {
+								if (input.mouse.left.released) {
+									world.get_ref<DockTree>()->dock_window(
+										entity,
+										node,
+										dock_data.target,
+										dock_data.split_axis,
+										dock_data.dock_side
+									);
+								}
+								else if (input.mouse.left.remain && !option_entity.has<DockPreview>(flecs::Any)) {
+									const auto preview_entity = create_dockspace_preview(world, node.size, dock_data.split_axis, dock_data.dock_side);
+									const auto preview_holder = dock_data.dock_options_container.lookup(std::format("{}_preview_holder", dock_data.dock_options_container.name().c_str()).c_str());
+
+									preview_entity.child_of(preview_holder);
+
+									option_entity.add<DockPreview>(preview_entity);
+								}
+							}
+							else {
+								if (option_entity.has<DockPreview>(flecs::Any)) {
+									option_entity.target<DockPreview>(0).destruct();
+									option_entity.remove<DockPreview>(flecs::Any);
+								}
 							}
 						}
 					}
 				});
+		});
+
+	world.system<ResizeNodeTarget, TrackResize, Input, DockTree>()
+		.kind(Phases::Update)
+		.each([](flecs::entity entity, ResizeNodeTarget resize_target, TrackResize track_cursor, Input& input, DockTree& tree) {
+			auto& node = tree.get_node(resize_target->id);
+
+			node.size += input.mouse.position - track_cursor->origin;
+		});
+
+	world.system<DragNodeTarget, TrackDrag, Input, DockTree>("docked window drag")
+		.kind(Phases::Update)
+		.each([](flecs::entity entity, DragNodeTarget drag_target, TrackDrag track_cursor, Input& input, DockTree& tree) {
+			auto& node = tree.get_node(drag_target->id);
+
+			node.position += input.mouse.position - track_cursor->origin;
+		});
+
+	world.system<DockNodeRef, DockTree>("floating window drag")
+		.with<TrackDrag>()
+		.with<DragTarget>("$drag_target")
+		.term_at(0).src("$drag_target")
+		.kind(Phases::Update)
+		.each([](flecs::iter& it, size_t i, DockNodeRef& dock_node, DockTree& tree) {
+			tree.undock_window(it.get_var("drag_target"), dock_node.id);
 		});
 
 	world.system<Node, GlobalTransform, DockNodeRef, DockTree>()
@@ -555,9 +664,52 @@ flecs::entity ps::create_dockspace(flecs::world &world, flecs::entity window, co
 
 static std::uint64_t dock_preview_id = 0;
 
-flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const DockNode& dock_node) {
-	const auto editor_root = world.lookup("editor_root");
+flecs::entity ps::create_dockspace_preview(flecs::world& world, glm::vec2 size, SplitAxis split_axis, DockSide dock_side) {
+	const auto background_color = Color::from_uint(69, 133, 136, 127);
 	const auto name = std::format("dockspace_preview_{}", dock_preview_id++);
+
+	auto main_entity = world.entity(name.c_str())
+		.set<BackgroundColor>(TRANSPARENT)
+		.add<DockPreviewNode>()
+		.set<Node>({
+			.sizing_policy = { Node::Grow{}, Node::Grow{} },
+			.grow_direction = split_axis == SplitAxis::Horizontal ? Node::GrowDirection::Vertical : Node::GrowDirection::Horizontal,
+		});
+
+	auto top_left_entity = world.entity(main_entity, std::format("{}_top_left", name).c_str())
+		.set<BackgroundColor>(TRANSPARENT)
+		.set<Node>({
+			.sizing_policy = { Node::Grow{}, Node::Grow{} },
+			.grow_direction = split_axis == SplitAxis::Horizontal ? Node::GrowDirection::Vertical : Node::GrowDirection::Horizontal,
+		});
+
+	auto bot_right_entity = world.entity(main_entity, std::format("{}_bot_right", name).c_str())
+		.set<BackgroundColor>(TRANSPARENT)
+		.set<Node>({
+			.sizing_policy = { Node::Grow{}, Node::Grow{} },
+			.child_alignment = { 1.f, 1.f },
+			.grow_direction = split_axis == SplitAxis::Horizontal ? Node::GrowDirection::Vertical : Node::GrowDirection::Horizontal,
+		});
+
+	auto preview_entity = world.entity(dock_side == DockSide::TopLeft ? top_left_entity : bot_right_entity, std::format("{}_preview", name).c_str())
+		.set<BackgroundColor>(background_color)
+		.set<Node>({
+			.sizing_policy = {
+				split_axis == SplitAxis::Horizontal
+					? std::pair<Node::SizePolicy, Node::SizePolicy>(Node::Grow{}, Node::Grow{ .max = size.y })
+					: std::pair<Node::SizePolicy, Node::SizePolicy>(Node::Grow{ .max = size.x }, Node::Grow{})
+			},
+		});
+
+	return main_entity;
+}
+
+flecs::entity ps::create_dockspace_inner_options(flecs::world& world, const DockNode& dock_node) {
+	const auto background_color = Color::from_uint(69, 133, 136, 180);
+	const auto border_radius = 4.f;
+
+	const auto editor_root = world.lookup("editor_root");
+	const auto name = std::format("dockspace_options_{}", dock_preview_id++);
 	const auto size = std::min({ dock_node.size.x, dock_node.size.y, 150.f });
 
 	DockingTarget docking_target = [&]() -> DockingTarget {
@@ -576,7 +728,7 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 
 	auto dockspace_entity = world.entity(editor_root, name.c_str())
 		.set<BackgroundColor>(TRANSPARENT)
-		.add<DockPreviewNode>()
+		.add<DockOptionsNode>()
 		.set<Transform>({
 			.translation = glm::vec3(dock_node.position, 0.f)
 		})
@@ -586,7 +738,14 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.absolute = true,
 		});
 
-	auto innert_holder = world.entity(dockspace_entity, std::format("{}_inner_holder", name).c_str())
+	auto preview_holder = world.entity(dockspace_entity, std::format("{}_preview_holder", name).c_str())
+		.set<BackgroundColor>(TRANSPARENT)
+		.set<Node>({
+			.sizing_policy = { Node::Grow{}, Node::Grow{} },
+			.absolute = true,
+		});
+
+	auto options_holder = world.entity(dockspace_entity, std::format("{}_options_holder", name).c_str())
 		.set<BackgroundColor>(TRANSPARENT)
 		.set<Node>({
 			.sizing_policy = { Node::Fixed{ size }, Node::Fixed{ size } },
@@ -594,21 +753,21 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.grow_direction = Node::GrowDirection::Vertical,
 		});
 
-	auto top_holder = world.entity(innert_holder, std::format("{}_top_holder", name).c_str())
+	auto top_holder = world.entity(options_holder, std::format("{}_top_holder", name).c_str())
 		.set<BackgroundColor>(TRANSPARENT)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
 			.child_gap = { 4.f, 4.f },
 		});
 
-	auto middle_holder = world.entity(innert_holder, std::format("{}_middle_holder", name).c_str())
+	auto middle_holder = world.entity(options_holder, std::format("{}_middle_holder", name).c_str())
 		.set<BackgroundColor>(TRANSPARENT)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
 			.child_gap = { 4.f, 4.f },
 		});
 
-	auto bottom_holder = world.entity(innert_holder, std::format("{}_bottom_holder", name).c_str())
+	auto bottom_holder = world.entity(options_holder, std::format("{}_bottom_holder", name).c_str())
 		.set<BackgroundColor>(TRANSPARENT)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
@@ -622,10 +781,10 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 		});
 
 	auto top_docking_entity = world.entity(top_holder, std::format("{}_top_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -633,6 +792,7 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Horizontal,
 			.dock_side = DockSide::TopLeft,
+			.dock_options_container = dockspace_entity,
 		});
 
 		auto tr_pusher = world.entity(top_holder, std::format("{}_tr_pusher", name).c_str())
@@ -642,10 +802,10 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 		});
 
 	auto left_docking_entity = world.entity(middle_holder, std::format("{}_left_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -653,13 +813,14 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Vertical,
 			.dock_side = DockSide::TopLeft,
+			.dock_options_container = dockspace_entity,
 		});
 
 	auto mid_docking_entity = world.entity(middle_holder, std::format("{}_mid_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -667,13 +828,14 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::None,
 			.dock_side = DockSide::TopLeft,
+			.dock_options_container = dockspace_entity,
 		});
 
 	auto right_docking_entity = world.entity(middle_holder, std::format("{}_right_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -681,6 +843,7 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Vertical,
 			.dock_side = DockSide::BotRight,
+			.dock_options_container = dockspace_entity,
 		});
 
 
@@ -691,10 +854,10 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 		});
 
 	auto bot_docking_entity = world.entity(bottom_holder, std::format("{}_bot_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Grow{}, Node::Grow{} },
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -702,6 +865,7 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Horizontal,
 			.dock_side = DockSide::BotRight,
+			.dock_options_container = dockspace_entity,
 		});
 
 		auto br_pusher = world.entity(bottom_holder, std::format("{}_br_pusher", name).c_str())
@@ -713,9 +877,13 @@ flecs::entity ps::create_dockspace_inner_preview(flecs::world& world, const Dock
 	return dockspace_entity;
 }
 
-flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const DockNode& dock_node) {
+flecs::entity ps::create_dockspace_outer_options(flecs::world& world, const DockNode& dock_node) {
+	const auto background_color = Color::from_uint(69, 133, 136, 180);
+	const auto border_radius = 4.f;
+
 	const auto editor_root = world.lookup("editor_root");
-	const auto name = std::format("dockspace_preview_{}", dock_preview_id++);
+	const auto name = std::format("dockspace_options_{}", dock_preview_id++);
+
 	DockingTarget docking_target = [&]() -> DockingTarget {
 		if (dock_node.id != 0) {
 			return NodeTarget{
@@ -732,7 +900,7 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 
 	auto dockspace_entity = world.entity(editor_root, name.c_str())
 		.set<BackgroundColor>(TRANSPARENT)
-		.add<DockPreviewNode>()
+		.add<DockOptionsNode>()
 		.set<Transform>({
 			.translation = glm::vec3(dock_node.position, 0.f)
 		})
@@ -741,13 +909,20 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 			.absolute = true,
 		});
 
+	auto preview_holder = world.entity(dockspace_entity, std::format("{}_preview_holder", name).c_str())
+		.set<BackgroundColor>(TRANSPARENT)
+		.set<Node>({
+			.sizing_policy = { Node::Grow{}, Node::Grow{} },
+			.absolute = true,
+		});
+
 	auto left_docking_entity = world.entity(dockspace_entity, std::format("{}_left_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Fixed{ 50.f }, Node::Fixed{ 100.f } },
 			.self_alignment = { 0.f, 0.5f },
 			.absolute = true,
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -755,15 +930,16 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Vertical,
 			.dock_side = DockSide::TopLeft,
+			.dock_options_container = dockspace_entity,
 		});
 
 	auto right_docking_entity = world.entity(dockspace_entity, std::format("{}_right_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Fixed{ 50.f }, Node::Fixed{ 100.f } },
 			.self_alignment = { 1.f, 0.5f },
 			.absolute = true,
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -771,15 +947,16 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Vertical,
 			.dock_side = DockSide::BotRight,
+			.dock_options_container = dockspace_entity,
 		});
 
 	auto top_docking_entity = world.entity(dockspace_entity, std::format("{}_top_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Fixed{ 100.f }, Node::Fixed{ 50.f } },
 			.self_alignment = { 0.5f, 0.f },
 			.absolute = true,
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -787,15 +964,16 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Horizontal,
 			.dock_side = DockSide::TopLeft,
+			.dock_options_container = dockspace_entity,
 		});
 
 	auto bot_docking_entity = world.entity(dockspace_entity, std::format("{}_bot_docking", name).c_str())
-		.set<BackgroundColor>(Color::from_hex("#458588"))
+		.set<BackgroundColor>(background_color)
 		.set<Node>({
 			.sizing_policy = { Node::Fixed{ 100.f }, Node::Fixed{ 50.f } },
 			.self_alignment = { 0.5f, 1.f },
 			.absolute = true,
-			.border_radius = 4.f,
+			.border_radius = border_radius,
 		})
 		.add<DockingOption>()
 		.add<Button>()
@@ -803,6 +981,7 @@ flecs::entity ps::create_dockspace_outer_preview(flecs::world& world, const Dock
 			.target = docking_target,
 			.split_axis = SplitAxis::Horizontal,
 			.dock_side = DockSide::BotRight,
+			.dock_options_container = dockspace_entity,
 		});
 
 	return dockspace_entity;
