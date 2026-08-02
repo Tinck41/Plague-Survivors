@@ -16,6 +16,8 @@
 #include "ui_render_module_new/module.h"
 #include "windowModule/module.h"
 #include "windowModule/components.h"
+#include <iostream>
+#include <ostream>
 
 using namespace ps;
 
@@ -55,8 +57,7 @@ flecs::opaque<std::vector<T>, T> std_vector_support(flecs::world& world) {
 	});
 
 	// Enable direct access to vector elements
-	ts.serialize_element([](const flecs::serializer *s, const std::vector<T> *data,
-		size_t element) -> int {
+	ts.serialize_element([](const flecs::serializer *s, const std::vector<T> *data, size_t element) -> int {
 		if (element >= data->size()) {
 			return 1;
 		}
@@ -133,8 +134,7 @@ flecs::opaque<std::unordered_set<T>, T> std_unordered_set_support(flecs::world& 
 }
 
 template <typename T>
-flecs::opaque<std::optional<T>, T>
-std_optional_support(flecs::world &world) {
+flecs::opaque<std::optional<T>, T> std_optional_support(flecs::world &world) {
 	return flecs::opaque<std::optional<T>, T>()
 		.as_type(world.vector<T>())
 		.serialize( [](const flecs::serializer *s, const std::optional<T> *data) {
@@ -168,6 +168,25 @@ std_optional_support(flecs::world &world) {
 	});
 }
 
+template <typename T>
+flecs::opaque<std::pair<T, T>, T> std_pair_support(flecs::world& world) {
+    return flecs::opaque<std::pair<T, T>, T>()
+        .as_type(world.component<std::pair<T, T>>()
+			.member("first", &std::pair<T, T>::first)
+			.member("second", &std::pair<T, T>::second)
+		)
+        .serialize([](const flecs::serializer *s, const std::pair<T, T> *data) {
+			s->member("first");
+            s->value(data->first);
+			s->member("second");
+            s->value(data->second);
+            return 0;
+        })
+        .ensure_element([](std::pair<T, T> *data, size_t id) {
+            return (id == 0) ? &data->first : &data->second;
+        });
+}
+
 DefaultModules::DefaultModules(flecs::world& world) {
 	world.component<std::string>()
 		.opaque(std_string_support);
@@ -197,6 +216,12 @@ DefaultModules::DefaultModules(flecs::world& world) {
 		.member<float>("y")
 		.member<float>("z");
 
+	world.component<glm::vec4>()
+		.member<float>("x")
+		.member<float>("y")
+		.member<float>("z")
+		.member<float>("w");
+
 	world.component<SDL_Color>()
 		.member<unsigned char>("r")
 		.member<unsigned char>("g")
@@ -225,7 +250,25 @@ DefaultModules::DefaultModules(flecs::world& world) {
 		.member<std::uint8_t>("b")
 		.member<std::uint8_t>("a");
 
-	world.module<DefaultModules>();
+	world.component<std::optional<float>>()
+		.opaque(std_optional_support<float>);
+
+	world.component<std::optional<double>>()
+		.opaque(std_optional_support<double>);
+
+	world.component<std::optional<int>>()
+		.opaque(std_optional_support<int>);
+
+	world.component<std::pair<float, float>>()
+		.member("first", &std::pair<float, float>::first)
+		.member("second", &std::pair<float, float>::second);
+
+	world.component<std::pair<std::optional<float>, std::optional<float>>>()
+		.member("first", &std::pair<std::optional<float>, std::optional<float>>::first)
+		.member("second", &std::pair<std::optional<float>, std::optional<float>>::second);
+
+
+	//world.module<DefaultModules>();
 
 	world.import<flecs::stats>();
 
@@ -242,5 +285,5 @@ DefaultModules::DefaultModules(flecs::world& world) {
 	world.import<InputModule>();
 	world.import<UiModule>();
 	world.import<UiRenderModule>();
-	world.import<DebugModule>();
+	//world.import<DebugModule>();
 }
