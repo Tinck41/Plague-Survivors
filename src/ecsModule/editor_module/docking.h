@@ -21,11 +21,25 @@ namespace ps {
 	enum class DockSide : std::uint8_t {
 		TopLeft = 0,
 		BotRight = 1,
+		Center = 2,
 	};
+
+	struct Split {
+		SplitAxis split_axis;
+		DockSide dock_side;
+	};
+
+	struct Window {
+
+	};
+
+	using DockKind = std::variant<Split, Window>;
 
 	struct DockNode {
 		flecs::entity preview_entity;
-		flecs::entity options_entity;
+		flecs::entity outer_options;
+		flecs::entity inner_options;
+		flecs::entity tabsbar;
 
 		std::vector<flecs::entity> windows;
 		size_t active_window = 0;
@@ -58,6 +72,11 @@ namespace ps {
 	struct DockPreviewNode {};
 	struct DockingEnabled {};
 
+	struct DockWindowId {
+		DockNodeId node_id;
+		size_t id;
+	};
+
 	struct WindowTarget {
 		flecs::entity window;
 		glm::vec2 size;
@@ -83,6 +102,7 @@ namespace ps {
 		void add_dockspace(flecs::entity& dockspace);
 		void dock_window(flecs::entity source, const Node& soruce_node, const DockingTarget& target, SplitAxis split_axis, DockSide dock_side);
 		void undock_window(flecs::entity window, DockNodeId node_id);
+		void update_active_window(DockNodeId node_id, size_t window_id);
 
 		void bfs(DockNodeId node_id, const std::function<void(DockNode&)>& callback);
 		void dfs(DockNodeId node_id, const std::function<void(DockNode&)>& callback);

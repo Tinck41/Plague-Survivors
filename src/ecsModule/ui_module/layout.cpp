@@ -43,6 +43,10 @@ void LayoutComposer::push_node(LayoutNode node) {
 	++nodes_num;
 }
 
+void LayoutComposer::set_text(size_t bfs_index, const LayoutNode::TextData& text_data) {
+	nodes[bfs_index].text_data = text_data;
+}
+
 void LayoutComposer::build() {
 	calculate_fit_width();
 	calculate_grow_shrink_width();
@@ -500,7 +504,7 @@ void LayoutComposer::calculate_positions() {
 }
 
 void LayoutComposer::bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback) {
-	for (size_t i = 1; i < nodes_num; ++i) {
+	for (size_t i = 1; i < nodes_num + 1; ++i) {
 		if (!nodes[i].display) {
 			continue;
 		}

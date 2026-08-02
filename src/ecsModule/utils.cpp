@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <queue>
 
@@ -77,6 +78,27 @@ void ps::utils::insert_child_back(flecs::entity parent, flecs::entity child) {
 		std::erase(children, child);
 
 		children.push_back(child);
+		parent.set_child_order(children.data(), children.size());
+	}
+}
+
+void ps::utils::insert_child_before(flecs::entity parent, flecs::entity child, flecs::entity before) {
+	child.child_of(parent);
+
+	if (parent.has(flecs::OrderedChildren)) {
+		auto children = get_children(parent);
+
+		auto it = std::ranges::find(children, before);
+
+		if (it != children.end()) {
+			auto [first, last] = std::ranges::remove_if(children, [id = child.id()](flecs::entity_t child) {
+				return child == id;
+			});
+
+			children.erase(first, last);
+			children.insert(it, child);
+		}
+
 		parent.set_child_order(children.data(), children.size());
 	}
 }

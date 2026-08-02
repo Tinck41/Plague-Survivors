@@ -13,6 +13,7 @@ namespace ps::utils {
 	void bfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback);
 	void insert_child(flecs::entity parent, flecs::entity child, size_t position = -1);
 	void insert_child_back(flecs::entity parent, flecs::entity child);
+	void insert_child_before(flecs::entity parent, flecs::entity child, flecs::entity before);
 
 	size_t get_children_count(const flecs::entity& parent);
 

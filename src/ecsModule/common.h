@@ -7,6 +7,7 @@ namespace ps {
 		PreUpdate,
 		Update,
 		PostUpdate,
+		CalcTransform, // TODO: need rethinck system ordering
 		CollectRenderData,
 		SortRenderData,
 		PrepareRenderData,

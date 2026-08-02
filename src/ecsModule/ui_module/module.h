@@ -19,11 +19,6 @@ namespace ps {
 	};
 
 	struct Node {
-		enum class GrowDirection : std::uint8_t {
-			Horizontal,
-			Vertical,
-		};
-
 		enum class Overflow : std::uint8_t {
 			Visible,
 			Clip,
@@ -58,8 +53,6 @@ namespace ps {
 		glm::vec4 margin; // l, r, t, b
 		glm::vec4 padding; // l, r, t, b
 
-		GrowDirection grow_direction = GrowDirection::Horizontal;
-
 		bool display = true;
 		bool absolute = false;
 
@@ -67,9 +60,52 @@ namespace ps {
 		float border_width = 0.f;
 	};
 
+	enum class GrowDirection : std::uint8_t {
+		Horizontal,
+		Vertical,
+	};
+
+	enum class Overflow : std::uint8_t {
+		Visible,
+		Clip,
+		Scroll,
+	};
+
+	struct Vertical {};
+	struct Horizontal {};
+
+	struct Fixed {
+		float value;
+	};
+
+	struct Fit {
+		std::optional<float> min;
+		std::optional<float> max;
+	};
+
+	struct Grow {
+		std::optional<float> min;
+		std::optional<float> max;
+	};
+
+	struct SizeStrategy {
+		using Strategy = std::variant<Fixed, Fit, Grow>;
+
+		Strategy x{ Fit{} };
+		Strategy y{ Fit{} };
+	};
+
 	struct NodeIndex {
-		size_t dfs;
-		size_t bfs;
+		size_t dfs = 0;
+		size_t bfs = 0;
+
+		bool external_dfs_source = false;
+		bool external_bfs_source = false;
+	};
+
+	enum class Type {
+		Retained,
+		Immediate,
 	};
 
 	enum class Interaction {
@@ -97,19 +133,14 @@ namespace ps {
 		using std::string::string;
 
 		Text(const std::string& string) : std::string(string) {}
+		Text(const flecs::string& string) : std::string(string.c_str()) {}
+		Text(flecs::string string) : std::string(string.c_str()) {}
+		Text(const char* string) : std::string(string) {}
 	};
 
 	struct Composite {
-		enum class Element : std::uint8_t {
-			TopLeft,
-			Top,
-			TopRight,
-			Left,
-			Middle,
-			Right,
-			BotLeft,
-			Bot,
-			BotRight,
+		enum class Kind : std::uint8_t {
+			Three
 		};
 
 		static Composite create_3_v() {
@@ -156,6 +187,8 @@ namespace ps {
 		float stack_index;
 		FocusStrategy focus_strategy;
 	};
+
+	struct InsertBefore {};
 
 	struct UiModule {
 		UiModule(flecs::world& world);

@@ -36,7 +36,7 @@ TransformModule::TransformModule(flecs::world& world) {
 
 	world.system<GlobalTransform*, GlobalTransform, Transform>("transform system")
 		.term_at(0).parent().cascade()
-		.kind(Phases::PostUpdate)
+		.kind(Phases::CalcTransform)
 		.each([](flecs::entity e, GlobalTransform* parentGlobal, GlobalTransform& childGlobal, Transform& childLocal) {
 			childLocal.matrix =
 				glm::translate(glm::mat4{ 1.f }, childLocal.translation) *

@@ -49,10 +49,12 @@ namespace ps {
 		LayoutComposer();
 
 		void push_node(LayoutNode node);
+		void set_text(size_t bfs_index, const LayoutNode::TextData& text_data);
 		void build();
 		void clear();
 
 		const LayoutNode& operator[](size_t index) const { return nodes[index]; }
+		LayoutNode& operator[](size_t index) { return nodes[index]; }
 	private:
 		void calculate_fit_width();
 		void calculate_fit_height();

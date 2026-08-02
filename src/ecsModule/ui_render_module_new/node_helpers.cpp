@@ -285,7 +285,7 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 	auto color_query = world.query_builder()
 		.with<Node>()
 		.with<NodeIndex>()
-		.with<BorderColor>()
+		.with<BorderColor>().optional()
 		.with<BackgroundColor>()
 		.with<GlobalTransform>()
 		.with<Aabb>()
@@ -294,7 +294,6 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 		.with<ExtractedNodes>().src("$helper").inout()
 		.with<RenderPhase>().src("$phase_entity").inout()
 		.with<Aabb>().src("$camera").inout()
-		.without<Text>()
 		.build();
 
 	return RenderPhaseExtractor{
@@ -305,7 +304,6 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 			while(it.next()) {
 				auto node_field = it.field<Node>(0);
 				auto stack_index_field = it.field<NodeIndex>(1);
-				auto border_color_field = it.field<BorderColor>(2);
 				auto color_field = it.field<BackgroundColor>(3);
 				auto transform_field = it.field<GlobalTransform>(4);
 				auto aabb_field = it.field<Aabb>(5);
@@ -320,10 +318,8 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 					}
 
 					const auto entity = it.entity(i);
-
 					const auto& node = node_field[i];
 					const auto& stack_index = stack_index_field[i].dfs;
-					const auto& border_color = border_color_field[i];
 					const auto& color = color_field[i];
 					const auto& transform = transform_field[i];
 
@@ -347,7 +343,7 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 						color,
 						node.size,
 						glm::vec2{ 0.f, 0.f },
-						border_color,
+						it.is_set(2) ? it.field<BorderColor>(2)[i] : glm::vec4{},
 						node.border_radius,
 						node.border_width
 					);
