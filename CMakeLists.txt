@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(Plague-Survivors LANGUAGES CXX C)
+project(SoulEngine LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,23 +30,17 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_ttf)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glaze)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross)
 
-include_directories(${CMAKE_SOURCE_DIR}/vendor/glaze/include)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/box2d/include)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/glm)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/matchit)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross/include)
-include_directories(${CMAKE_SOURCE_DIR}/src)
-
-add_executable(${PROJECT_NAME} 
-	src/main.cpp
+add_library(${PROJECT_NAME} STATIC
 	src/core/application.h
 	src/core/application.cpp
+	src/game_module.h
+	src/game_module.cpp
 	src/texture.h
 	src/texture.cpp
 	src/font.h
 	src/font.cpp
 	src/dag.h
+	src/bitset.h
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
 	src/ecsModule/ui_module/layout.h
@@ -108,13 +102,10 @@ add_executable(${PROJECT_NAME}
 	src/ecsModule/meshModule/module.cpp
 	src/ecsModule/debug_module/module.h
 	src/ecsModule/debug_module/module.cpp
-	src/ecsModule/editor_module/palette.h
 	src/ecsModule/editor_module/docking.h
 	src/ecsModule/editor_module/docking.cpp
-	src/ecsModule/editor_module/window.h
-	src/ecsModule/editor_module/window.cpp
-	src/ecsModule/editor_module/functions.h
-	src/ecsModule/editor_module/functions.cpp
+	src/ecsModule/editor_module/immediate.h
+	src/ecsModule/editor_module/immediate.cpp
 	src/ecsModule/editor_module/components.h
 	src/ecsModule/editor_module/module.h
 	src/ecsModule/editor_module/module.cpp
@@ -134,20 +125,43 @@ add_executable(${PROJECT_NAME}
 	src/utils/visit.h
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE flecs::flecs_static)
-target_link_libraries(${PROJECT_NAME} PRIVATE box2d)
-target_link_libraries(${PROJECT_NAME} PRIVATE spdlog)
-target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::Headers)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3-static)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_image::SDL3_image)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_ttf::SDL3_ttf)
-target_link_libraries(${PROJECT_NAME} PRIVATE SDL3_shadercross::SDL3_shadercross)
-target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/glaze/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/box2d/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/spdlog/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/glm)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/matchit)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
-set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )
-set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+target_link_libraries(${PROJECT_NAME} PUBLIC flecs::flecs_static)
+target_link_libraries(${PROJECT_NAME} PUBLIC box2d)
+target_link_libraries(${PROJECT_NAME} PUBLIC spdlog)
+target_link_libraries(${PROJECT_NAME} PUBLIC glm::glm)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::Headers)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3-static)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_image::SDL3_image)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_ttf::SDL3_ttf)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_shadercross::SDL3_shadercross)
+target_link_libraries(${PROJECT_NAME} PUBLIC glaze::glaze)
+
+add_executable(Plague-Survivors
+	src/main.cpp
+)
+
+message(STATUS "flecs_exports path: ${CMAKE_SOURCE_DIR}/flecs_exports.txt")
+message(STATUS "file exists: ${CMAKE_SOURCE_DIR}/flecs_exports.txt")
+file(SIZE "${CMAKE_SOURCE_DIR}/flecs_exports.txt" EXPORTS_SIZE)
+message(STATUS "file size: ${EXPORTS_SIZE}")
+
+target_link_libraries(Plague-Survivors PRIVATE SoulEngine)
+
+get_target_property(LINK_OPTS Plague-Survivors LINK_OPTIONS)
+message(STATUS "Plague-Survivors LINK_OPTIONS: ${LINK_OPTS}")
+
+set_target_properties(Plague-Survivors PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR} )
+set_target_properties(Plague-Survivors PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR} )
+set_target_properties(Plague-Survivors PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 
 #set_target_properties(${PROJECT_NAME} PROPERTIES XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++${CMAKE_CXX_STANDARD}" )
 
@@ -159,4 +173,4 @@ set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $
 #		VERBATIM)
 #endif()
 
-install(TARGETS ${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} Plague-Survivors)

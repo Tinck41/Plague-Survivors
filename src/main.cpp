@@ -22,6 +22,7 @@
 #include "ecsModule/sprite_render_module/module.h"
 #include "ecsModule/text_render_module/module.h"
 #include "utils/sdl.h"
+#include "game_module.h"
 
 void default_init(flecs::world& world) {
 	using namespace ps;
@@ -108,6 +109,8 @@ int main() {
 		.add_module<ps::DefaultModules>()
 		.add_module<ps::EditorModule>()
 		.add_system(ps::Phases::OnStart, &default_init)
+		//.add_module<se::GameModule>()
+		//.add_script("assets/scripts/editor.flecs")
 		.run();
 }
 
