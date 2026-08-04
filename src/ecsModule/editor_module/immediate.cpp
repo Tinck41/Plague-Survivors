@@ -10,6 +10,7 @@
 
 #include <format>
 #include <queue>
+#include <ranges>
 
 using namespace ps::editor;
 

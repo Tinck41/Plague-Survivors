@@ -40,7 +40,6 @@ add_library(${PROJECT_NAME} STATIC
 	src/font.h
 	src/font.cpp
 	src/dag.h
-	src/bitset.h
 	src/ecsModule/assetModule/module.h
 	src/ecsModule/assetModule/module.cpp
 	src/ecsModule/ui_module/layout.h
@@ -147,11 +146,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC glaze::glaze)
 add_executable(Plague-Survivors
 	src/main.cpp
 )
-
-message(STATUS "flecs_exports path: ${CMAKE_SOURCE_DIR}/flecs_exports.txt")
-message(STATUS "file exists: ${CMAKE_SOURCE_DIR}/flecs_exports.txt")
-file(SIZE "${CMAKE_SOURCE_DIR}/flecs_exports.txt" EXPORTS_SIZE)
-message(STATUS "file size: ${EXPORTS_SIZE}")
 
 target_link_libraries(Plague-Survivors PRIVATE SoulEngine)
 
