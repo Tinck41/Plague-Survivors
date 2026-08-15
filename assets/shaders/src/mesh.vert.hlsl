@@ -2,6 +2,10 @@ cbuffer UBO : register(b0, space1) {
 	float4x4 mvp;
 }
 
+cbuffer Local : register(b1, space1) {
+	float4x4 model;
+}
+
 struct Input {
 	float3 position : TEXCOORD0;
 	float4 color : TEXCOORD1;
@@ -17,7 +21,7 @@ struct Output {
 Output main(Input input) {
 	Output output;
 
-	output.position = mul(mvp, float4(input.position, 1));
+	output.position = mul(mvp, mul(model, float4(input.position, 1)));
 	output.color = input.color;
 	output.uv = input.uv;
 
