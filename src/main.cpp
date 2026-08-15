@@ -23,18 +23,74 @@
 #include "ecsModule/text_render_module/module.h"
 #include "utils/sdl.h"
 #include "game_module.h"
+#include "tiny_obj_loader.h"
+#include "ecsModule/mesh3d_module/module.h"
+#include "arena.h"
+
+namespace se {
+	struct CameraController {
+		float speed = 0;
+	};
+}
 
 void default_init(flecs::world& world) {
-	using namespace ps;
+	using namespace se;
+
+	world.component<se::CameraController>()
+		.member("speed", &se::CameraController::speed);
+
+	auto device = world.get_ref<RenderDevice>();
+	const auto window = world.get<WindowModule>().main_window;
+
+	glm::ivec2 window_size;
+
+	SDL_GetWindowSize(window, &window_size.x, &window_size.y);
+
+	auto depth_texture_create_info = SDL_GPUTextureCreateInfo{
+		.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+		.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+		.width = static_cast<Uint32>(window_size.x),
+		.height = static_cast<Uint32>(window_size.y),
+		.layer_count_or_depth = 1,
+		.num_levels = 1,
+	};
+
+	auto dept_texture = SDL_CreateGPUTexture(device->gpu, &depth_texture_create_info);
 
 	auto camera = world.entity("camera")
-		.set<ps::Transform>({ .translation = { 0.f, 0.f, 0.f } })
-		.set<ps::RenderLayers>({ RenderLayers::layer(2) | RenderLayers::layer(1) })
-		.add<ps::Camera>();
+		.add<CameraController>()
+		.set<se::Transform>({ .translation = { 0.f, 0.f, 4.f } })
+		.set<se::RenderLayers>({ RenderLayers::layer(2) | RenderLayers::layer(1) })
+		.set<se::Camera>({
+			.depth_texture = dept_texture,
+		});
 
 	{
+		auto transparent_3d = world.entity("transparent_3d");
 		auto transparent_2d = world.entity("transparent_2d");
 		auto transparent_ui = world.entity("transparent_ui");
+
+		{
+			auto mesh3d_phase = world.entity("mesh3d_phase").child_of(transparent_3d);
+
+			mesh3d_phase.set(create_mesh3d_material(world));
+			mesh3d_phase.set(create_mesh3d_context(world));
+			mesh3d_phase.set(create_mesh3d_extractor(world, mesh3d_phase));
+			mesh3d_phase.set(create_mesh3d_uploader());
+
+			mesh3d_phase.add<ExtractedMeshes3d>();
+
+			transparent_3d.set(create_default_sorter());
+			transparent_3d.set(create_default_renderer());
+
+			transparent_3d.set(RenderPhase{
+				.extractors = { mesh3d_phase },
+				.sorters = { transparent_3d },
+				.uploaders = { mesh3d_phase },
+				.renderers = { transparent_3d },
+				.extract_view_callback = &extract_3d_view,
+			});
+		}
 
 		{
 			auto sprite_phase = world.entity("sprite_phase").child_of(transparent_2d);
@@ -100,17 +156,39 @@ void default_init(flecs::world& world) {
 			});
 		}
 
-		camera.set(RenderPhases{ transparent_2d, transparent_ui });
+		camera.set(RenderPhases{ transparent_3d, transparent_2d, transparent_ui });
+	}
+}
+
+void rotate(flecs::world& world, se::Transform& transform, se::Mesh3d& mesh, se::Mesh3dUniform& uniform) {
+	transform.rotation += glm::vec3(0.f, 30.f, 0.f) * world.delta_time();
+	uniform.model = transform.matrix;
+}
+
+void camera_controll(flecs::world& world, se::Input& input, se::Transform& transform, se::CameraController& controll) {
+	if (input.keys[se::Key::A].remain) {
+		transform.translation.x -= controll.speed * world.delta_time();
+	}
+	else if (input.keys[se::Key::D].remain) {
+		transform.translation.x += controll.speed * world.delta_time();
+	}
+	else if (input.keys[se::Key::W].remain) {
+		transform.translation.z -= controll.speed * world.delta_time();
+	}
+	else if (input.keys[se::Key::S].remain) {
+		transform.translation.z += controll.speed * world.delta_time();
 	}
 }
 
 int main() {
-	ps::Application::create()
-		.add_module<ps::DefaultModules>()
-		.add_module<ps::EditorModule>()
-		.add_system(ps::Phases::OnStart, &default_init)
-		//.add_module<se::GameModule>()
-		//.add_script("assets/scripts/editor.flecs")
+	se::Application::create()
+		.add_module<se::DefaultModules>()
+		.add_module<se::EditorModule>()
+		.add_system(se::Phases::OnStart, &default_init)
+		.add_system(se::Phases::Update, &rotate)
+		.add_system(se::Phases::Update, &camera_controll)
+		.add_module<se::GameModule>()
+		.add_script("assets/scripts/sandbox.flecs")
 		.run();
 }
 
