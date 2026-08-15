@@ -29,10 +29,12 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_image)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL3_ttf)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glaze)
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross)
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/meshoptimizer)
 
 add_library(${PROJECT_NAME} STATIC
 	src/core/application.h
 	src/core/application.cpp
+	src/core/tiny_obj_loader.cpp
 	src/game_module.h
 	src/game_module.cpp
 	src/texture.h
@@ -99,6 +101,9 @@ add_library(${PROJECT_NAME} STATIC
 	src/ecsModule/meshModule/components.h
 	src/ecsModule/meshModule/module.h
 	src/ecsModule/meshModule/module.cpp
+	src/ecsModule/mesh3d_module/components.h
+	src/ecsModule/mesh3d_module/module.h
+	src/ecsModule/mesh3d_module/module.cpp
 	src/ecsModule/debug_module/module.h
 	src/ecsModule/debug_module/module.cpp
 	src/ecsModule/editor_module/docking.h
@@ -130,6 +135,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/spd
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/glm)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/matchit)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/SDL_shadercross/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/tinyobjloader)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/vendor/meshoptimizer)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC flecs::flecs_static)
@@ -142,6 +149,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_image::SDL3_image)
 target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_ttf::SDL3_ttf)
 target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_shadercross::SDL3_shadercross)
 target_link_libraries(${PROJECT_NAME} PUBLIC glaze::glaze)
+target_link_libraries(${PROJECT_NAME} PUBLIC meshoptimizer)
 
 add_executable(Plague-Survivors
 	src/main.cpp

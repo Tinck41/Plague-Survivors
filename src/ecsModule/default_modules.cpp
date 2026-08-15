@@ -15,6 +15,7 @@
 #include "ui_module/module.h"
 #include "ui_render_module_new/module.h"
 #include "windowModule/module.h"
+#include "ecsModule/mesh3d_module/module.h"
 #include "windowModule/components.h"
 #include <iostream>
 #include <ostream>
@@ -285,5 +286,6 @@ DefaultModules::DefaultModules(flecs::world& world) {
 	world.import<InputModule>();
 	world.import<UiModule>();
 	world.import<UiRenderModule>();
+	world.import<Mesh3dModule>();
 	//world.import<DebugModule>();
 }

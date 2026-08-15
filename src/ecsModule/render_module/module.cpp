@@ -168,8 +168,13 @@ void render(flecs::iter& it) {
 				.load_op = camera.load_op,
 				.store_op = SDL_GPU_STOREOP_STORE
 			};
-
-			auto render_pass = SDL_BeginGPURenderPass(command_buffer, &color_target, 1, nullptr);
+			auto depth_stencil_target = SDL_GPUDepthStencilTargetInfo{
+				.texture = camera.depth_texture,
+				.clear_depth = 1.f,
+				.load_op = SDL_GPU_LOADOP_CLEAR,
+				.store_op = SDL_GPU_STOREOP_DONT_CARE,
+			};
+			auto render_pass = SDL_BeginGPURenderPass(command_buffer, &color_target, 1, &depth_stencil_target);
 
 			SDL_PushGPUDebugGroup(command_buffer, std::format("camera: {}", camera_entity.name().size() != 0 ? std::string(camera_entity.name()) : std::to_string(camera_entity.id())).c_str());
 

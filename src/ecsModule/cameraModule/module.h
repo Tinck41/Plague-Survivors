@@ -20,6 +20,7 @@ namespace se {
 		glm::mat4 projection;
 
 		std::variant<std::monostate, flecs::entity_t, std::shared_ptr<Texture>> render_target;
+		SDL_GPUTexture* depth_texture = nullptr;
 
 		Color clear_color = TRANSPARENT;
 

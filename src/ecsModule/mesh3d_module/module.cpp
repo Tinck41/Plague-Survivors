@@ -1,0 +1,433 @@
+#include "module.h"
+#include "components.h"
+
+#include "ecsModule/assetModule/module.h"
+#include "ecsModule/common.h"
+#include "ecsModule/render_module/module.h"
+#include "ecsModule/ui_render_module_new/node_helpers.h"
+#include "ecsModule/windowModule/module.h"
+#include "utils/sdl.h"
+#include "ext/matrix_clip_space.hpp"
+#include "ext/matrix_transform.hpp"
+#include "meshoptimizer.h"
+
+using namespace se;
+
+#define MESH3D_MAX_VERTEX_COUNT 100'000'000
+#define MESH3D_MAX_INDEX_COUNT 100'000'000
+
+Mesh3dModule::Mesh3dModule(flecs::world& world) {
+	world.module<Mesh3dModule>();
+
+	world.component<Mesh3dDescription::OptimizationFlags>()
+		.constant("None", Mesh3dDescription::OptimizationFlags::None)
+		.constant("Indexing", Mesh3dDescription::OptimizationFlags::Indexing)
+		.constant("VertexCache", Mesh3dDescription::OptimizationFlags::VertexCache)
+		.constant("Overdraw", Mesh3dDescription::OptimizationFlags::Overdraw)
+		.constant("VertexFetch", Mesh3dDescription::OptimizationFlags::VertexFetch)
+		.constant("VertexQuantization", Mesh3dDescription::OptimizationFlags::VertexQuantization)
+		.constant("IndexFiltering", Mesh3dDescription::OptimizationFlags::IndexFiltering)
+		.constant("ShadowIndexing", Mesh3dDescription::OptimizationFlags::ShadowIndexing)
+		.constant("All", Mesh3dDescription::OptimizationFlags::All);
+
+	world.component<Mesh3d>();
+	world.component<Mesh3dUniform>()
+		.member("model", &Mesh3dUniform::model);
+	world.component<Mesh3dAllocator>()
+		.add(flecs::Singleton);
+	world.component<Mesh3dDescription>()
+		.member("texture_path", &Mesh3dDescription::texture_path)
+		.member("model_path", &Mesh3dDescription::model_path)
+		.member("model_format", &Mesh3dDescription::model_format)
+		.member("optimization_flags", &Mesh3dDescription::optimization_flags);
+
+	world.system<Mesh3dDescription, RenderDevice, AssetStorage, Mesh3dAllocator>("mesh loader")
+		.without<Mesh3d>()
+		.term_at(1).src<RenderDevice>()
+		.kind(Phases::Update)
+		.each([&world] (flecs::entity entity, Mesh3dDescription& descriotion, RenderDevice& device, AssetStorage& storage, Mesh3dAllocator& allocator) {
+			std::vector<Vertex3d> vertices;
+			std::vector<std::uint32_t> indices;
+
+			switch (descriotion.model_format) {
+			case se::Mesh3dDescription::Format::obj: {
+				tinyobj::attrib_t attrib;
+				std::vector<tinyobj::shape_t> shapes;
+				std::vector<tinyobj::material_t> materials;
+
+				tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr, descriotion.model_path.c_str());
+
+				for (const auto& shape : shapes) {
+					size_t index_offset = 0;
+
+					for (const auto num_face_vertices : shape.mesh.num_face_vertices) {
+						for (size_t fv = 0; fv  < num_face_vertices; ++fv) {
+							const auto idx = shape.mesh.indices[fv + index_offset];
+
+							Vertex3d vertex;
+
+							vertex.position.x = attrib.vertices[3 * idx.vertex_index + 0];
+							vertex.position.y = attrib.vertices[3 * idx.vertex_index + 1];
+							vertex.position.z = attrib.vertices[3 * idx.vertex_index + 2];
+
+							if (idx.texcoord_index > 0) {
+								vertex.uv.x = attrib.texcoords[2 * idx.texcoord_index + 0];
+								vertex.uv.y = 1.f - attrib.texcoords[2 * idx.texcoord_index + 1];
+							}
+
+							indices.push_back(vertices.size());
+							vertices.push_back(vertex);
+						}
+
+						index_offset += num_face_vertices;
+					}
+				}
+				break;
+			}
+			default:
+				break;
+			}
+
+			if (!static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::None)) {
+				const auto optimaze_indexing            = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::Indexing);
+				const auto optimaze_vetex_cache         = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::VertexCache);
+				const auto optimaze_overdraw            = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::Overdraw);
+				const auto optimaze_vertex_fetch        = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::VertexFetch);
+				const auto optimaze_vertex_quantization = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::VertexQuantization);
+				const auto optimaze_filtering           = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::IndexFiltering);
+				const auto optimaze_shadow_indexing     = static_cast<bool>(descriotion.optimization_flags & Mesh3dDescription::OptimizationFlags::ShadowIndexing);
+
+
+				if (optimaze_indexing) {
+					std::vector<std::uint32_t> remap(vertices.size());
+
+					const auto vertex_count = meshopt_generateVertexRemap(remap.data(), indices.data(), indices.size(), vertices.data(), vertices.size(), sizeof(Vertex3d));
+
+					std::vector<Vertex3d> remapped_vertices(vertex_count);
+
+					meshopt_remapIndexBuffer(indices.data(), indices.data(), indices.size(), remap.data());
+					meshopt_remapVertexBuffer(remapped_vertices.data(), vertices.data(), vertices.size(), sizeof(Vertex3d), remap.data());
+
+					vertices = std::move(remapped_vertices);
+				}
+
+				if (optimaze_vetex_cache) {
+					meshopt_optimizeVertexCache(indices.data(), indices.data(), indices.size(), vertices.size());
+				}
+
+				if (optimaze_overdraw) {
+					meshopt_optimizeOverdraw(indices.data(), indices.data(), indices.size(), &vertices[0].position.x, vertices.size(), sizeof(Vertex3d), 1.05f);
+				}
+
+				if (optimaze_vertex_fetch) {
+					std::vector<Vertex3d> optimized_vertices(vertices.size());
+
+					meshopt_optimizeVertexFetch(optimized_vertices.data(), indices.data(), indices.size(), vertices.data(), vertices.size(), sizeof(Vertex3d));
+
+					vertices = std::move(optimized_vertices);
+				}
+
+				if (optimaze_vertex_quantization) {
+					// TODO
+				}
+
+				if (optimaze_filtering) {
+					indices.resize(meshopt_filterIndexBuffer(indices.data(), indices.data(), indices.size(), &vertices[0].position.x, vertices.size(), sizeof(float) * 3, sizeof(Vertex3d)));
+				}
+
+				if (optimaze_shadow_indexing) {
+					std::vector<std::uint32_t> shadow_indices(indices.size());
+
+					meshopt_generateShadowIndexBuffer(shadow_indices.data(), indices.data(), indices.size(), &vertices[0].position.x, vertices.size(), sizeof(float) * 3, sizeof(Vertex3d));
+					meshopt_optimizeVertexCache(shadow_indices.data(), shadow_indices.data(), indices.size(), vertices.size());
+				}
+			}
+
+			//const auto [id, pos] = request_mesh3d_allocate(allocator, std::move(vertices), std::move(indices));
+
+			entity
+				.set(create_mesh3d_material(world))
+				.set<Mesh3dUniform>({
+
+				})
+				.set<Mesh3d>({
+					.texture = storage.load_texture(*device.gpu, descriotion.texture_path),
+					.vertices = std::move(vertices),
+					.indices = std::move(indices),
+				});
+		});
+
+	world.add<Mesh3dAllocator>();
+}
+
+se::Material se::create_mesh3d_material(flecs::world& world) {
+	const auto window = world.get<WindowModule>().main_window;
+	auto& device = world.get<RenderDevice>();
+
+	auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/mesh.vert.msl", 2);
+	auto frag_shader = load_shader(*device.gpu, "assets/shaders/out/mesh.frag.msl", 0, 1);
+
+	SDL_GPUColorTargetDescription color_target_description{
+		.format = SDL_GetGPUSwapchainTextureFormat(device.gpu, window),
+		.blend_state = {
+			.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+			.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.color_blend_op = SDL_GPU_BLENDOP_ADD,
+			.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+			.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+			.enable_blend = true,
+		}
+	};
+
+	std::array<SDL_GPUVertexAttribute, 3> vertex_attrs{
+		SDL_GPUVertexAttribute{
+			.location = 0,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+			.offset = offsetof(Vertex3d, position),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 1,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			.offset = offsetof(Vertex3d, color),
+		},
+		SDL_GPUVertexAttribute{
+			.location = 2,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = offsetof(Vertex3d, uv),
+		},
+	};
+
+	SDL_GPUVertexBufferDescription vertex_buffer_description{
+		.slot = 0,
+		.pitch = sizeof(Vertex3d),
+		.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+	};
+
+	SDL_GPUGraphicsPipelineCreateInfo pipeline_create_info{
+		.vertex_shader = vert_shader,
+		.fragment_shader = frag_shader,
+		.vertex_input_state = {
+			.vertex_buffer_descriptions = &vertex_buffer_description,
+			.num_vertex_buffers = 1,
+			.vertex_attributes = vertex_attrs.data(),
+			.num_vertex_attributes = vertex_attrs.size(),
+		},
+		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+		.rasterizer_state = {
+			//.fill_mode = SDL_GPU_FILLMODE_LINE,
+			.cull_mode = SDL_GPU_CULLMODE_BACK,
+		},
+		.depth_stencil_state = {
+			.compare_op = SDL_GPU_COMPAREOP_LESS,
+			.enable_depth_test = true,
+			.enable_depth_write = true,
+		},
+		.target_info = {
+			.color_target_descriptions = &color_target_description,
+			.num_color_targets = 1,
+			.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+			.has_depth_stencil_target = true,
+		}
+	};
+
+	SDL_GPUSamplerCreateInfo sampler_create_info{};
+
+	auto sampler = SDL_CreateGPUSampler(device.gpu, &sampler_create_info);
+	auto pipeline = SDL_CreateGPUGraphicsPipeline(device.gpu, &pipeline_create_info);
+
+	SDL_ReleaseGPUShader(device.gpu, vert_shader);
+	SDL_ReleaseGPUShader(device.gpu, frag_shader);
+
+	return {
+		.pipeline = pipeline,
+		.sampler = sampler,
+		.vertex_uniforms = { world.id<DefaultUniform>(), world.id<Mesh3dUniform>() },
+	};
+}
+
+se::PhaseContext se::create_mesh3d_context(flecs::world& world) {
+	const auto& device = world.get<RenderDevice>();
+
+	SDL_GPUBufferCreateInfo vertex_buffer_create_info{
+		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+		.size = sizeof(Vertex3d) * MESH3D_MAX_VERTEX_COUNT,
+	};
+
+	SDL_GPUBufferCreateInfo index_buffer_create_info{
+		.usage = SDL_GPU_BUFFERUSAGE_INDEX,
+		.size = sizeof(int) * MESH3D_MAX_INDEX_COUNT,
+	};
+
+	SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info{
+		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+		.size = (sizeof(Vertex3d) * MESH3D_MAX_VERTEX_COUNT) + (sizeof(int) * MESH3D_MAX_INDEX_COUNT)
+	};
+
+	auto vertex_buffer = SDL_CreateGPUBuffer(device.gpu, &vertex_buffer_create_info);
+	auto index_buffer = SDL_CreateGPUBuffer(device.gpu, &index_buffer_create_info);
+	auto transfer_buffer = SDL_CreateGPUTransferBuffer(device.gpu, &transfer_buffer_create_info);
+
+	return {
+		.index_buffer = index_buffer,
+		.vertex_buffer = vertex_buffer,
+		.transfer_buffer = transfer_buffer,
+		.index_element_size = SDL_GPU_INDEXELEMENTSIZE_32BIT,
+	};
+
+}
+
+se::RenderPhaseExtractor se::create_mesh3d_extractor(flecs::world& world, flecs::entity_t helper) {
+	auto mesh_query = world.query_builder()
+		.with<Mesh3d>()
+		.with<const GlobalTransform>()
+		.with<const Material>()
+		.with<ExtractedMeshes3d>().src("$helper").inout()
+		.with<RenderPhase>().src("$phase_entity").inout()
+		.with<Aabb>().src("$camera").inout()
+		.build();
+
+	return {
+		.callback = [](flecs::iter& it) {
+			auto helper = it.get_var("helper");
+
+			while (it.next()) {
+				auto mesh_field = it.field<Mesh3d>(0);
+				auto transform_field = it.field<const GlobalTransform>(1);
+				auto material_field = it.field<const Material>(2);
+
+				auto& extracted_meshes = it.field<ExtractedMeshes3d>(3)[0];
+				auto& render_phase = it.field<RenderPhase>(4)[0];
+				//auto& camera_aabb = it.field<Aabb>(11)[0];
+
+				for (auto i : it) {
+					//if (!camera_aabb.is_intersect(aabb_field[i])) {
+					//	continue;
+					//}
+
+					const auto entity = it.entity(i);
+
+					auto& mesh = mesh_field[i];
+					const auto& transform = transform_field[i];
+					const auto& material = material_field[i];
+
+					render_phase.items.emplace_back(entity, helper, entity, extracted_meshes.size(), transform.translation.z);
+
+					extracted_meshes.emplace_back(
+						entity.id(),
+						entity.id(),
+						&mesh.texture->get_gpu_texture(),
+						mesh.vertices.data(),
+						mesh.vertices.size(),
+						mesh.indices.data(),
+						mesh.indices.size(),
+						transform.matrix,
+						mesh.color
+					);
+				}
+			}
+		},
+		.query = mesh_query,
+		.helper = helper,
+	};
+
+}
+
+se::RenderPhaseUploader se::create_mesh3d_uploader() {
+	return {
+		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& uploader, SDL_GPUDevice* device, SDL_GPUCopyPass* copy_pass) {
+			auto& extracted_meshes = uploader.get_mut<ExtractedMeshes3d>();
+			auto& context = uploader.get_mut<PhaseContext>();
+			auto& phase_items = render_phase.get_mut<RenderPhase>().items;
+
+			auto transfer_buffer = SDL_MapGPUTransferBuffer(device, context.transfer_buffer, false);
+
+			auto vertices = static_cast<Vertex3d*>(transfer_buffer);
+			auto indices = reinterpret_cast<int*>(vertices + MESH3D_MAX_VERTEX_COUNT);
+
+			uint32_t vertex_count = 0;
+			uint32_t index_count  = 0;
+
+			size_t current_batch_index = 0;
+
+			for (size_t i = 0; i < phase_items.size(); ++i) {
+				auto& item = phase_items[i];
+
+				if (item.context_entity != uploader
+					|| item.extracted_index >= extracted_meshes.size()
+					|| extracted_meshes[item.extracted_index].entity != item.entity) {
+					current_batch_index = i + 1;
+					continue;
+				}
+
+				const auto& mesh = extracted_meshes[item.extracted_index];
+
+				if (i == current_batch_index || phase_items[current_batch_index].texture != mesh.texture) {
+					current_batch_index = i;
+
+					phase_items[current_batch_index].texture = mesh.texture;
+					phase_items[current_batch_index].first_index = index_count;
+					phase_items[current_batch_index].num_instances = 1;
+				}
+
+				std::memcpy(vertices + vertex_count, mesh.vertices, mesh.vertices_num * sizeof(Vertex3d));
+				std::memcpy(indices + index_count, mesh.indices, mesh.indices_num * sizeof(uint32_t));
+
+				vertex_count += mesh.vertices_num;
+				index_count += mesh.indices_num;
+
+				phase_items[current_batch_index].num_indices = index_count;
+				phase_items[current_batch_index].batch_size += 1;
+			}
+
+			extracted_meshes.clear();
+
+			SDL_UnmapGPUTransferBuffer(device, context.transfer_buffer);
+
+
+			if (vertex_count == 0 || index_count == 0) {
+				return;
+			}
+
+			SDL_GPUTransferBufferLocation vertex_transfer_buffer_location{
+				.transfer_buffer = context.transfer_buffer,
+				.offset = 0 
+			};
+			SDL_GPUBufferRegion vertex_buffer_location{
+				.buffer = context.vertex_buffer,
+				.offset = 0,
+				.size = static_cast<Uint32>(sizeof(Vertex3d) * vertex_count)
+			};
+
+			SDL_UploadToGPUBuffer(copy_pass, &vertex_transfer_buffer_location, &vertex_buffer_location, false);
+
+			SDL_GPUTransferBufferLocation index_transfer_buffer_location {
+				.transfer_buffer = context.transfer_buffer,
+				.offset = static_cast<Uint32>(sizeof(Vertex3d) * MESH3D_MAX_VERTEX_COUNT)
+			};
+			SDL_GPUBufferRegion index_buffer_region {
+				.buffer = context.index_buffer,
+				.offset = 0,
+				.size = static_cast<Uint32>(sizeof(int) * index_count)
+			};
+
+			SDL_UploadToGPUBuffer(copy_pass, &index_transfer_buffer_location, &index_buffer_region, false);
+		}
+	};
+}
+
+glm::mat4 se::extract_3d_view(const Camera& camera, const GlobalTransform& transform) {
+	auto proj = glm::perspective(glm::radians(60.f), camera.viewport.x / camera.viewport.y, 1.f, 1000.f);
+	auto view = glm::translate(glm::mat4(1.f), -transform.translation);
+	return proj * view;
+}
+
+std::pair<uint64_t, uint64_t> se::request_mesh3d_allocate(Mesh3dAllocator& allocator, std::vector<Vertex3d> vertices, std::vector<uint32_t> indices) {
+	auto id  = allocator.allocate_requests.size();
+	auto pos = allocator.last_allocate_pos;
+
+	allocator.last_allocate_pos += vertices.size();
+	allocator.allocate_requests.emplace_back(std::move(vertices), std::move(indices));
+
+	return { id, pos };
+}
