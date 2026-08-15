@@ -11,7 +11,7 @@
 #include <variant>
 #include <vector>
 
-namespace ps {
+namespace se {
 	struct UiTreeChanged {};
 
 	struct CustomNodeIndex {
