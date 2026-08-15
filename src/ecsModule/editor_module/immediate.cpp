@@ -12,7 +12,7 @@
 #include <queue>
 #include <ranges>
 
-using namespace ps::editor;
+using namespace se::editor;
 
 constexpr auto initial_window_size = glm::vec2{ 100.f, 100.f };
 

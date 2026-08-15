@@ -11,7 +11,7 @@
 #include <variant>
 #include <memory>
 
-namespace ps {
+namespace se {
 	using CameraCompositionGraph = Dag<flecs::entity>;
 
 	struct Camera {

@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace ps {
+namespace se {
 	class Font {
 	public:
 		Font(TTF_Font* font, std::string path);

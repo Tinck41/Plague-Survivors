@@ -2,7 +2,7 @@
 
 #include "flecs.h"
 
-namespace ps {
+namespace se {
 	struct DefaultModules {
 		DefaultModules(flecs::world& world);
 	};

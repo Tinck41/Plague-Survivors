@@ -6,7 +6,7 @@
 #include "ecsModule/meshModule/components.h"
 #include "ecsModule/renderModule/module.h"
 
-using namespace ps;
+using namespace se;
 
 MeshModule::MeshModule(flecs::world& world) {
 	world.module<MeshModule>();

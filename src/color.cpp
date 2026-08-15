@@ -2,7 +2,7 @@
 
 #include <limits>
 
-using namespace ps;
+using namespace se;
 
 Color Color::from_uint(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 	return from_uint(r, g, b, 255);

@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <format>
 
-using namespace ps;
+using namespace se;
 
 glm::mat4 extract_view_default(const Camera& camera, const GlobalTransform& transform) {
 	const auto view = glm::translate(glm::mat4(1.f), -transform.translation);
@@ -273,7 +273,7 @@ RenderModule::RenderModule(flecs::world& world) {
 	world.add<RenderStats>();
 }
 
-RenderPhaseSorter ps::create_default_sorter() {
+RenderPhaseSorter se::create_default_sorter() {
 	return {
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& sorter) {
 			auto& phase_items = render_phase.get_mut<RenderPhase>().items;
@@ -289,7 +289,7 @@ RenderPhaseSorter ps::create_default_sorter() {
 	};
 }
 
-RenderPhaseRenderer ps::create_default_renderer() {
+RenderPhaseRenderer se::create_default_renderer() {
 	return {
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& renderer, const DefaultUniform& default_uniform, SDL_GPURenderPass* render_pass, SDL_GPUCommandBuffer* cmd_buffer) {
 			auto* white_texture = &world.get<WhiteTexture>().texture->get_gpu_texture();

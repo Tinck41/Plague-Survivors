@@ -8,7 +8,7 @@
 #include "ecsModule/render_module/module.h"
 #include "utils/sdl.h"
 
-using namespace ps;
+using namespace se;
 
 #define SPRITE_MAX_INSTANCE_COUNT 4000
 
@@ -22,7 +22,7 @@ SpriteRenderModule::SpriteRenderModule(flecs::world& world) {
 		.member("center", &CirlceUniform::center);
 }
 
-Material ps::create_sprite_material(flecs::world& world) {
+Material se::create_sprite_material(flecs::world& world) {
 	auto& device = world.get<RenderDevice>();
 
 	auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/sprite_batch.vert.msl", 1);
@@ -111,7 +111,7 @@ Material ps::create_sprite_material(flecs::world& world) {
 	};
 }
 
-PhaseContext ps::create_sprite_context(flecs::world& world) {
+PhaseContext se::create_sprite_context(flecs::world& world) {
 	auto& device = world.get<RenderDevice>();
 
 	std::array<std::uint16_t, 6> indices{
@@ -176,7 +176,7 @@ PhaseContext ps::create_sprite_context(flecs::world& world) {
 	};
 }
 
-RenderPhaseExtractor ps::create_sprite_extractor(flecs::world& world, flecs::entity_t helper) {
+RenderPhaseExtractor se::create_sprite_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto sprite_query = world.query_builder()
 		.with<Sprite>()
 		.with<GlobalTransform>()
@@ -244,7 +244,7 @@ RenderPhaseExtractor ps::create_sprite_extractor(flecs::world& world, flecs::ent
 	};
 }
 
-RenderPhaseUploader ps::create_sprite_uploader() {
+RenderPhaseUploader se::create_sprite_uploader() {
 	return RenderPhaseUploader{
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& uploader, SDL_GPUDevice* gpu, SDL_GPUCopyPass* copy_pass) {
 			auto& extracted_sprites = uploader.get_mut<ExtractedSprites>();

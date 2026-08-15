@@ -1,6 +1,6 @@
 #include "font.h"
 
-using namespace ps;
+using namespace se;
 
 Font::Font(TTF_Font* font, std::string path) : m_resource(font), m_path(std::move(path)) {}
 

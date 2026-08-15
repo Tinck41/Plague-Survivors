@@ -11,12 +11,12 @@
 #include "ecsModule/render_module/material.h"
 #include "ecsModule/text_render_module/text_vertex.h"
 
-using namespace ps;
+using namespace se;
 
 #define TEXT_MAX_VERTEX_COUNT 4000
 #define TEXT_MAX_INDEX_COUNT  6000
 
-RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::entity_t helper) {
+RenderPhaseExtractor se::create_text_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto text_query = world.query_builder()
 		.with<const Node>()
 		.with<const NodeIndex>()
@@ -136,7 +136,7 @@ RenderPhaseExtractor ps::create_text_node_extractor(flecs::world& world, flecs::
 	};
 }
 
-RenderPhaseUploader ps::create_text_node_uploader() {
+RenderPhaseUploader se::create_text_node_uploader() {
 	return {
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& uploader, SDL_GPUDevice* device, SDL_GPUCopyPass* copy_pass) {
 			auto& extracted_texts = uploader.get_mut<ExtractedTextNodes>();

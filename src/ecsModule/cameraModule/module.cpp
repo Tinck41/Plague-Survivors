@@ -11,7 +11,7 @@
 #include "ext/matrix_clip_space.hpp"
 #include "spdlog/spdlog.h"
 
-using namespace ps;
+using namespace se;
 
 CameraModule::CameraModule(flecs::world& world) {
 	world.module<CameraModule>();

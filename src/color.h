@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string>
 
-namespace ps {
+namespace se {
 	struct Color {
 		static Color from_uint(std::uint8_t r, std::uint8_t g, std::uint8_t b);
 		static Color from_uint(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a);

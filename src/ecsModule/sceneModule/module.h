@@ -2,7 +2,7 @@
 
 #include "flecs.h"
 
-namespace ps {
+namespace se {
 	using Pipeline = flecs::entity;
 
 	struct ActiveScene{};

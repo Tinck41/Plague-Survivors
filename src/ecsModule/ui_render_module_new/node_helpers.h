@@ -5,7 +5,7 @@
 
 #include "flecs.h"
 
-namespace ps {
+namespace se {
 	struct UiVertex {
 		glm::vec3 position;
 		glm::vec2 uv;

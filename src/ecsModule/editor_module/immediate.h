@@ -13,11 +13,11 @@
 #include <vector>
 #include <unordered_set>
 
-namespace ps {
+namespace se {
 	class MouseState;
 }
 
-namespace ps::editor {
+namespace se::editor {
 	class Immediate {
 	public:
 		using HashId = std::uint64_t;

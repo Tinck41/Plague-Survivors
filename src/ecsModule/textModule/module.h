@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ps {
+namespace se {
 	class Font;
 
 	struct InitText {};

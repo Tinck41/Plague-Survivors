@@ -5,7 +5,7 @@
 #include <functional>
 #include <span>
 
-namespace ps::utils {
+namespace se::utils {
 	void dfs(flecs::entity e, std::function<void(flecs::entity)> callback);
 	void dfs(flecs::entity e, size_t depth, std::function<void(flecs::entity, const size_t)> callback);
 	void dfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback);

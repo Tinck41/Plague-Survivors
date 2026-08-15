@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-namespace ps {
+namespace se {
 	class File {
 	public:
 		File(std::filesystem::path path);

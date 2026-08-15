@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-using namespace ps;
+using namespace se;
 
 LayoutComposer::LayoutComposer() {
 	nodes.reserve(1024);

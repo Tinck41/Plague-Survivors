@@ -2,7 +2,7 @@
 
 #include <memory>
 
-namespace ps::utils {
+namespace se::utils {
 	template<typename T>
 	class InstanceBase {
 	public:

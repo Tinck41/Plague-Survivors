@@ -9,7 +9,7 @@
 #include <memory>
 #include <unordered_map>
 
-namespace ps {
+namespace se {
 	struct ExtractedSprite {
 		flecs::entity_t entity;
 		flecs::entity_t material_id;

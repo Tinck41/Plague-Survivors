@@ -3,7 +3,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace ps {
+namespace se {
 	template<class... Ts>
 	struct visitors : Ts... { using Ts::operator()...; };
 

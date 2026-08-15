@@ -2,7 +2,7 @@
 
 #include "flecs.h"
 
-namespace ps {
+namespace se {
 	struct FpsLabel {};
 	struct DrawCallsLabel {};
 

@@ -2,7 +2,7 @@
 
 #include "glm.hpp"
 
-namespace ps {
+namespace se {
 	struct Mesh;
 
 	struct Rectangle {

@@ -5,7 +5,7 @@
 #include "ecsModule/common.h"
 #include "spdlog/spdlog.h"
 
-using namespace ps;
+using namespace se;
 
 Application Application::create() {
 	Application app;

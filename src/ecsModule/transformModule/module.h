@@ -4,7 +4,7 @@
 #include "vec3.hpp"
 #include "mat4x4.hpp"
 
-namespace ps {
+namespace se {
 	struct Dirty {};
 
 	struct Transform {

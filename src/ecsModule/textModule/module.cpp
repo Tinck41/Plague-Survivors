@@ -12,7 +12,7 @@
 #include "utils/sdl.h"
 #include "font.h"
 
-using namespace ps;
+using namespace se;
 
 #define TEXT_MAX_VERTEX_COUNT 4000
 #define TEXT_MAX_INDEX_COUNT  6000

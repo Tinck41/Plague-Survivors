@@ -3,7 +3,7 @@
 #include "SDL3/SDL.h"
 #include "ext/vector_int2.hpp"
 
-namespace ps {
+namespace se {
 	struct Window {
 		enum class WindowState : std::uint8_t {
 			Hidden,

@@ -7,7 +7,7 @@
 #include "ecsModule/textModule/module.h"
 #include "font.h"
 
-using namespace ps;
+using namespace se;
 
 UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.module<UiRenderModule>();
@@ -82,6 +82,6 @@ UiRenderModule::UiRenderModule(flecs::world& world) {
 	world.component<ExtractedTextNodes>();
 }
 
-glm::mat4 ps::extract_ui_view(const Camera& camera, const GlobalTransform& transfrom) {
+glm::mat4 se::extract_ui_view(const Camera& camera, const GlobalTransform& transfrom) {
 	return camera.projection;
 }

@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace ps {
+namespace se {
 	struct GpuBuffer {
 		SDL_GPUBuffer* data;
 		size_t size;

@@ -1,6 +1,6 @@
 #include "texture.h"
 
-using namespace ps;
+using namespace se;
 
 Texture::Texture(SDL_GPUDevice* gpu, SDL_GPUTexture* texture, const glm::vec2& size) : m_gpu(gpu), m_texture(texture), m_size(size) {}
 

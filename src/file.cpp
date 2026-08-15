@@ -2,7 +2,7 @@
 
 #include "SDL3/SDL.h"
 
-using namespace ps;
+using namespace se;
 
 File::File(std::filesystem::path path) {
 	m_data = SDL_LoadFile(path.string().c_str(), &m_size);

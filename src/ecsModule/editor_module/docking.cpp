@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <queue>
 
-using namespace ps;
+using namespace se;
 
 void DockTree::add_dockspace(flecs::entity& dockspace) {
 	auto& node = create_root(glm::vec2(), glm::vec2());
@@ -834,7 +834,7 @@ DockingModule::DockingModule(flecs::world& world) {
 //	world.add<DockTree>();
 }
 
-flecs::entity ps::create_dockspace(flecs::world &world, flecs::entity window, const std::string &name) {
+flecs::entity se::create_dockspace(flecs::world &world, flecs::entity window, const std::string &name) {
 	auto tree = world.get_ref<DockTree>();
 	//auto content_entity = window.target<WindowContent>(0);
 
@@ -860,7 +860,7 @@ flecs::entity ps::create_dockspace(flecs::world &world, flecs::entity window, co
 
 static std::uint64_t dock_preview_id = 0;
 
-flecs::entity ps::create_dockspace_preview(flecs::world& world, glm::vec2 size, SplitAxis split_axis, DockSide dock_side) {
+flecs::entity se::create_dockspace_preview(flecs::world& world, glm::vec2 size, SplitAxis split_axis, DockSide dock_side) {
 	const auto background_color = Color::from_uint(69, 133, 136, 127);
 	const auto name = std::format("dockspace_preview_{}", dock_preview_id++);
 
@@ -941,7 +941,7 @@ flecs::entity ps::create_dockspace_preview(flecs::world& world, glm::vec2 size, 
 	return main_entity;
 }
 
-flecs::entity ps::create_dockspace_inner_options(flecs::world& world, const DockNode& dock_node) {
+flecs::entity se::create_dockspace_inner_options(flecs::world& world, const DockNode& dock_node) {
 	const auto background_color = Color::from_uint(69, 133, 136, 180);
 	const auto border_radius = 4.f;
 
@@ -1155,7 +1155,7 @@ flecs::entity ps::create_dockspace_inner_options(flecs::world& world, const Dock
 	return dockspace_entity;
 }
 
-flecs::entity ps::create_dockspace_outer_options(flecs::world& world, const DockNode& dock_node) {
+flecs::entity se::create_dockspace_outer_options(flecs::world& world, const DockNode& dock_node) {
 	const auto background_color = Color::from_uint(69, 133, 136, 180);
 	const auto border_radius = 4.f;
 

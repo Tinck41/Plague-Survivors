@@ -15,7 +15,7 @@ namespace std {
 	};
 }
 
-namespace ps {
+namespace se {
 	template<typename T>
 	class Dag {
 	public:

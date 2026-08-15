@@ -2,7 +2,7 @@
 
 #include "ecsModule/common.h"
 
-using namespace ps;
+using namespace se;
 
 void resetScene(flecs::world& ecs) {
 	ecs.delete_with(flecs::ChildOf, ecs.entity<SceneRoot>());

@@ -3,7 +3,7 @@
 #include "flecs.h"
 #include "SDL3/SDL.h"
 
-namespace ps {
+namespace se {
 	struct WindowModule {
 		WindowModule(flecs::world& world);
 

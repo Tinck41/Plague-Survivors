@@ -8,7 +8,7 @@
 #include <vector>
 #include <memory>
 
-namespace ps {
+namespace se {
 	struct RenderStats {
 		int draw_calls = 0;
 	};

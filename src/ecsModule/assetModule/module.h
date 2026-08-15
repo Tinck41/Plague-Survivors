@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ps {
+namespace se {
 	class AssetStorage {
 	public:
 		AssetStorage() = default;

@@ -10,7 +10,7 @@
 
 #include <ranges>
 
-using namespace ps;
+using namespace se;
 
 constexpr uint32_t max_sprites_per_batch = 10'000;
 

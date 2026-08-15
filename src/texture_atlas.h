@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace ps {
+namespace se {
 	struct TextureAtlas {
 		std::vector<SDL_FRect> rects;
 		size_t current_index;

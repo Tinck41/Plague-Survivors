@@ -1,6 +1,6 @@
 #pragma once
 
-namespace ps {
+namespace se {
 	enum class AppState {
 		Continue,
 		Exit,

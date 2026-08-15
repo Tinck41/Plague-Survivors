@@ -19,7 +19,7 @@
 #include <iostream>
 #include <ostream>
 
-using namespace ps;
+using namespace se;
 
 flecs::opaque<std::string> std_string_support(flecs::world& /*unused*/) {
 	flecs::opaque<std::string> ts;

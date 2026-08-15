@@ -15,7 +15,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace ps {
+namespace se {
 	struct Sprite {
 		glm::vec2 origin;
 		Color color = WHITE;

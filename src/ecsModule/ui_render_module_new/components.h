@@ -8,7 +8,7 @@
 #include <vector>
 #include <memory>
 
-namespace ps {
+namespace se {
 	struct ExtractedTextNode {
 		flecs::entity_t entity;
 		flecs::entity_t material_id;

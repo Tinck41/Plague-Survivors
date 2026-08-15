@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ps {
+namespace se {
 	struct ExtractedText2d {
 		flecs::entity_t entity;
 		flecs::entity_t material_id;

@@ -5,7 +5,7 @@
 #include "ecsModule/windowModule/module.h"
 #include "spdlog/spdlog.h"
 
-using namespace ps;
+using namespace se;
 
 EditorModule::EditorModule(flecs::world& world) {
 	world.module<EditorModule>();

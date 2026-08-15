@@ -2,7 +2,7 @@
 
 #include "components.h"
 
-using namespace ps;
+using namespace se;
 
 Rectangle::operator Mesh() {
 	return {};

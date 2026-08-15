@@ -9,11 +9,11 @@
 #include "ecsModule/ui_module/module.h"
 #include "utils/sdl.h"
 
-using namespace ps;
+using namespace se;
 
 #define NODE_MAX_ 10'000 // ????
 
-Material ps::create_node_material(flecs::world& world) {
+Material se::create_node_material(flecs::world& world) {
 	auto& device = world.get<RenderDevice>();
 
 	auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/ui.vert.msl", 1);
@@ -125,7 +125,7 @@ Material ps::create_node_material(flecs::world& world) {
 	};
 }
 
-PhaseContext ps::create_node_context(flecs::world& world) {
+PhaseContext se::create_node_context(flecs::world& world) {
 	auto& device = world.get<RenderDevice>();
 
 	std::vector<uint16_t> indices;
@@ -204,7 +204,7 @@ PhaseContext ps::create_node_context(flecs::world& world) {
 	};
 }
 
-RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs::entity_t helper) {
+RenderPhaseExtractor se::create_image_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto image_query = world.query_builder()
 		.with<Node>()
 		.with<NodeIndex>()
@@ -281,7 +281,7 @@ RenderPhaseExtractor ps::create_image_node_extractor(flecs::world& world, flecs:
 	};
 }
 
-RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs::entity_t helper) {
+RenderPhaseExtractor se::create_color_node_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto color_query = world.query_builder()
 		.with<Node>()
 		.with<NodeIndex>()
@@ -356,7 +356,7 @@ RenderPhaseExtractor ps::create_color_node_extractor(flecs::world& world, flecs:
 	};
 }
 
-RenderPhaseUploader ps::create_node_uploader() {
+RenderPhaseUploader se::create_node_uploader() {
 	return RenderPhaseUploader{
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& uploader, SDL_GPUDevice* gpu, SDL_GPUCopyPass* copy_pass) {
 			auto& extracted_nodes = uploader.get_mut<ExtractedNodes>();

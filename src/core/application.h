@@ -5,7 +5,7 @@
 #include <functional>
 #include <string>
 
-namespace ps {
+namespace se {
 	class Application {
 	public:
 		static Application create();

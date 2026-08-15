@@ -9,7 +9,7 @@
 
 #include <vector>
 
-namespace ps {
+namespace se {
 	class Texture;
 	class Aabb;
 

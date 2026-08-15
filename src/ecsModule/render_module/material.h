@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace ps {
+namespace se {
 	struct Material {
 		SDL_GPUGraphicsPipeline* pipeline;
 		SDL_GPUSampler* sampler;

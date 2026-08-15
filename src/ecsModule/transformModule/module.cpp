@@ -4,7 +4,7 @@
 #include "ext/matrix_transform.hpp"
 #include "gtc/quaternion.hpp"
 
-using namespace ps;
+using namespace se;
 
 TransformModule::TransformModule(flecs::world& world) {
 	world.module<TransformModule>();

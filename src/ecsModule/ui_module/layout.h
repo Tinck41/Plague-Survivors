@@ -7,7 +7,7 @@
 #include <vector>
 #include <optional>
 
-namespace ps {
+namespace se {
 	struct LayoutNode {
 		struct TextData {
 			std::string text;

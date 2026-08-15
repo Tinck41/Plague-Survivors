@@ -6,7 +6,7 @@
 #include "ecsModule/ui_module/module.h"
 #include "ecsModule/render_module/module.h"
 
-using namespace ps;
+using namespace se;
 
 DebugModule::DebugModule(flecs::world& world) {
 	world.module<DebugModule>();

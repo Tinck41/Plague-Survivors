@@ -6,7 +6,7 @@
 #include "flecs.h"
 #include "glm.hpp"
 
-namespace ps {
+namespace se {
 	struct UiRenderModule {
 		UiRenderModule(flecs::world& world);
 

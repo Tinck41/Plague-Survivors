@@ -10,7 +10,7 @@
 #include "utils/sdl.h"
 #include "SDL3_ttf/SDL_ttf.h"
 
-using namespace ps;
+using namespace se;
 
 #define TEXT_MAX_VERTEX_COUNT 4000
 #define TEXT_MAX_INDEX_COUNT  6000
@@ -85,7 +85,7 @@ TextRenderModule::~TextRenderModule() {
 	TTF_DestroyRendererTextEngine(engine);
 }
 
-Material ps::create_text_material(flecs::world& world) {
+Material se::create_text_material(flecs::world& world) {
 	const auto& device = world.get<RenderDevice>();
 
 	auto vert_shader = load_shader(*device.gpu, "assets/shaders/out/text.vert.msl", 1);
@@ -188,7 +188,7 @@ Material ps::create_text_material(flecs::world& world) {
 	};
 }
 
-PhaseContext ps::create_text_context(flecs::world& world) {
+PhaseContext se::create_text_context(flecs::world& world) {
 	const auto& device = world.get<RenderDevice>();
 
 	SDL_GPUBufferCreateInfo vertex_buffer_create_info{
@@ -218,7 +218,7 @@ PhaseContext ps::create_text_context(flecs::world& world) {
 	};
 }
 
-RenderPhaseExtractor ps::create_text_extractor(flecs::world& world, flecs::entity_t helper) {
+RenderPhaseExtractor se::create_text_extractor(flecs::world& world, flecs::entity_t helper) {
 	auto text_query = world.query_builder()
 		.with<const Text2d>()
 		.with<const TextFont>()
@@ -312,7 +312,7 @@ RenderPhaseExtractor ps::create_text_extractor(flecs::world& world, flecs::entit
 	};
 }
 
-RenderPhaseUploader ps::create_text_uploader() {
+RenderPhaseUploader se::create_text_uploader() {
 	return {
 		.callback = [](flecs::world& world, flecs::entity& render_phase, flecs::entity& uploader, SDL_GPUDevice* device, SDL_GPUCopyPass* copy_pass) {
 			auto& extracted_texts = uploader.get_mut<ExtractedText2ds>();

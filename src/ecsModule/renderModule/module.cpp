@@ -12,7 +12,7 @@
 #include <ranges>
 #include <format>
 
-using namespace ps;
+using namespace se;
 
 RenderModule::RenderModule(flecs::world& world) {
 	world.module<RenderModule>();

@@ -3,7 +3,7 @@
 #include "components.h"
 #include "ecsModule/common.h"
 
-using namespace ps;
+using namespace se;
 
 constexpr unsigned WINDOW_WIDTH  = 600;
 constexpr unsigned WINDOW_HEIGHT = 600;

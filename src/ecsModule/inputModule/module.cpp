@@ -9,9 +9,9 @@
 #include "SDL3/SDL.h"
 #include "spdlog/spdlog.h"
 
-using namespace ps;
+using namespace se;
 
-int ps_key_to_sdl_key(Key key) {
+int se_key_to_sdl_key(Key key) {
 	switch(key) {
 		case Key::F1:         return SDL_SCANCODE_F1;
 		case Key::F2:         return SDL_SCANCODE_F2;
@@ -97,7 +97,7 @@ int ps_key_to_sdl_key(Key key) {
 	}
 }
 
-Key sdl_key_to_ps_key(int key) {
+Key sdl_key_to_se_key(int key) {
 	switch(key) {
 		case SDL_SCANCODE_F1:             return Key::F1;
 		case SDL_SCANCODE_F2:             return Key::F2;
@@ -268,14 +268,14 @@ InputModule::InputModule(flecs::world& world) {
 					});
 				}
 				else if (event.type == SDL_EVENT_KEY_DOWN) {
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = !input.keys[sdl_key_to_ps_key(event.key.scancode)].remain;
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].remain = true;
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].released = false;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].pressed = !input.keys[sdl_key_to_se_key(event.key.scancode)].remain;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].remain = true;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].released = false;
 				}
 				else if (event.type == SDL_EVENT_KEY_UP) {
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].pressed = false;
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].remain = false;
-					input.keys[sdl_key_to_ps_key(event.key.scancode)].released = true;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].pressed = false;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].remain = false;
+					input.keys[sdl_key_to_se_key(event.key.scancode)].released = true;
 				}
 				else if (event.type == SDL_EVENT_MOUSE_MOTION) {
 					input.mouse.position.x = event.motion.x;

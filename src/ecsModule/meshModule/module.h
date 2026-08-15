@@ -10,7 +10,7 @@
 #include <vector>
 #include <variant>
 
-namespace ps {
+namespace se {
 	struct Vertex {
 		glm::vec3 position;
 		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f};

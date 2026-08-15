@@ -4,7 +4,7 @@
 #include "ecsModule/common.h"
 #include "spdlog/spdlog.h"
 
-using namespace ps;
+using namespace se;
 
 #define FONT_BASE_SIZE 64
 

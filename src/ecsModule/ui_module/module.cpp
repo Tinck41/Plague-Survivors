@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <vector>
 
-using namespace ps;
+using namespace se;
 
 void update_clipping(flecs::entity entity, const GlobalTransform& transform, const Node& node, std::optional<SDL_Rect> parent_clip) {
 	if (!node.display) {

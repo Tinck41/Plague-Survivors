@@ -1,6 +1,6 @@
 #include "components.h"
 
-using namespace ps;
+using namespace se;
 
 Window Window::create(const char *title, int width, int height, SDL_WindowFlags flags) {
 	auto window = SDL_CreateWindow(title, width, height, flags);

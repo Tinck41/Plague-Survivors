@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <queue>
 
-void ps::utils::dfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
+void se::utils::dfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
 	callback(e);
 
 	e.children([callback](flecs::entity child) {
@@ -11,7 +11,7 @@ void ps::utils::dfs(flecs::entity e, std::function<void(flecs::entity)> callback
 	});
 }
 
-void ps::utils::dfs(flecs::entity e, size_t depth, std::function<void(flecs::entity, const size_t)> callback) {
+void se::utils::dfs(flecs::entity e, size_t depth, std::function<void(flecs::entity, const size_t)> callback) {
 	callback(e, depth);
 
 	e.children([callback, depth = depth + 1](flecs::entity child) {
@@ -19,13 +19,13 @@ void ps::utils::dfs(flecs::entity e, size_t depth, std::function<void(flecs::ent
 	});
 }
 
-void ps::utils::dfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback) {
+void se::utils::dfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback) {
 	for (const auto& root : roots) {
 		dfs(root, callback);
 	}
 }
 
-void ps::utils::bfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
+void se::utils::bfs(flecs::entity e, std::function<void(flecs::entity)> callback) {
 	std::queue<flecs::entity> queue;
 	queue.push(e);
 
@@ -41,7 +41,7 @@ void ps::utils::bfs(flecs::entity e, std::function<void(flecs::entity)> callback
 	}
 }
 
-void ps::utils::bfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback) {
+void se::utils::bfs(std::span<flecs::entity> roots, std::function<void(flecs::entity)> callback) {
 	std::queue<flecs::entity> queue;
 	for (const auto& root : roots) {
 		queue.push(root);
@@ -59,7 +59,7 @@ void ps::utils::bfs(std::span<flecs::entity> roots, std::function<void(flecs::en
 	}
 }
 
-void ps::utils::insert_child(flecs::entity parent, flecs::entity child, size_t position) {
+void se::utils::insert_child(flecs::entity parent, flecs::entity child, size_t position) {
 	child.child_of(parent);
 
 	if (position != -1 && parent.has(flecs::OrderedChildren)) {
@@ -69,7 +69,7 @@ void ps::utils::insert_child(flecs::entity parent, flecs::entity child, size_t p
 	}
 }
 
-void ps::utils::insert_child_back(flecs::entity parent, flecs::entity child) {
+void se::utils::insert_child_back(flecs::entity parent, flecs::entity child) {
 	child.child_of(parent);
 
 	if (parent.has(flecs::OrderedChildren)) {
@@ -82,7 +82,7 @@ void ps::utils::insert_child_back(flecs::entity parent, flecs::entity child) {
 	}
 }
 
-void ps::utils::insert_child_before(flecs::entity parent, flecs::entity child, flecs::entity before) {
+void se::utils::insert_child_before(flecs::entity parent, flecs::entity child, flecs::entity before) {
 	child.child_of(parent);
 
 	if (parent.has(flecs::OrderedChildren)) {
@@ -103,11 +103,11 @@ void ps::utils::insert_child_before(flecs::entity parent, flecs::entity child, f
 	}
 }
 
-size_t ps::utils::get_children_count(const flecs::entity& parent) {
+size_t se::utils::get_children_count(const flecs::entity& parent) {
 	return ecs_get_ordered_children(parent.world(), parent).count;
 }
 
-std::vector<flecs::entity_t> ps::utils::get_children(const flecs::entity& parent) {
+std::vector<flecs::entity_t> se::utils::get_children(const flecs::entity& parent) {
 	std::vector<flecs::entity_t> children;
 
 	parent.children([&children](flecs::entity child) {
@@ -117,7 +117,7 @@ std::vector<flecs::entity_t> ps::utils::get_children(const flecs::entity& parent
 	return children;
 }
 
-std::vector<flecs::entity_t> ps::utils::get_alive_children(const flecs::entity& parent) {
+std::vector<flecs::entity_t> se::utils::get_alive_children(const flecs::entity& parent) {
 	std::vector<flecs::entity_t> children;
 
 	parent.children([&children](flecs::entity child) {
@@ -131,7 +131,7 @@ std::vector<flecs::entity_t> ps::utils::get_alive_children(const flecs::entity& 
 	return children;
 }
 
-std::vector<flecs::entity_t> ps::utils::get_all_children_dfs(const flecs::entity& root) {
+std::vector<flecs::entity_t> se::utils::get_all_children_dfs(const flecs::entity& root) {
 	std::vector<flecs::entity_t> children;
 
 	dfs(root, [&children](flecs::entity e) {

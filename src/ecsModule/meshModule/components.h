@@ -2,7 +2,7 @@
 
 #include "utils/sdl.h"
 
-namespace ps {
+namespace se {
 	struct Mesh {
 		GpuBuffer index_buffer;
 		GpuBuffer vertex_buffer;

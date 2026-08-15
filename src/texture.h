@@ -4,7 +4,7 @@
 #include "color.h"
 #include "vec2.hpp"
 
-namespace ps {
+namespace se {
 	class Texture {
 	public:
 		Texture(SDL_GPUDevice* gpu, SDL_GPUTexture* texture, const glm::vec2& size);

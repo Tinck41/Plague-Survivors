@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ps {
+namespace se {
 	using DockNodeId = std::uint32_t;
 
 	enum class SplitAxis : std::uint8_t {
