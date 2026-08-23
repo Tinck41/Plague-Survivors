@@ -5,6 +5,7 @@
 #include "arena.h"
 
 #include <memory>
+#include <unordered_map>
 
 namespace se {
 	struct Vertex3d {
@@ -17,15 +18,29 @@ namespace se {
 		std::shared_ptr<Texture> texture;
 		Color color;
 
-		std::vector<Vertex3d> vertices;
-		std::vector<std::uint32_t> indices;
+		Vertex3d* vertices = nullptr;
+		uint32_t* indices = nullptr;
 
-		std::uint64_t vertex_index;
-		std::uint64_t vertex_count;
-
-		uint64_t request_id = UINT64_MAX;
-		uint64_t vertex_pos = 0;
+		size_t vertices_size = 0;
+		size_t indices_size = 0;
 	};
+
+	struct Mesh3dGpuMeta {
+		uint64_t vertex_offset;
+		uint64_t index_offset;
+	};
+
+	struct Mesh3dGpu {
+		SDL_GPUBuffer* vertex_buffer = nullptr;
+		SDL_GPUBuffer* index_buffer = nullptr;
+	};
+	
+	// static meshed:
+	//  - common buffers(vertex/index/storage)
+	//  - different material
+	//  - mesh meta info?
+	//  dynamic mesh:
+	//  - per mesh buffers
 
 	struct Mesh3dUniform {
 		glm::mat4 model;
@@ -74,20 +89,33 @@ namespace se {
 		OptimizationFlags optimization_flags = OptimizationFlags::All;
 	};
 
+	struct ObjAsset {
+		std::string path;
+		std::string texture_path;
+	};
+
+	struct Mesh3dCachedData {
+		uint64_t vertex_offset = 0;
+		uint64_t vertex_count = 0;
+		uint64_t index_offset  = 0;
+		uint64_t index_count  = 0;
+	};
+
 	struct Mesh3dAllocator {
 		struct AllocateRequest {
 			std::vector<Vertex3d> vertices;
 			std::vector<uint32_t> indices;
 		};
 
-		struct ReuploadRequest {
-			std::vector<Vertex3d> vertices;
-			uint64_t pos;
-		};
-
 		std::vector<AllocateRequest> allocate_requests;
-		std::vector<ReuploadRequest> reupload_requests;
 
-		uint64_t last_allocate_pos = 0;
+		uint64_t vertex_offset = 0;
+		uint64_t index_offset  = 0;
+
+		std::unordered_map<std::string, Mesh3dCachedData> cache; 
+	};
+
+	struct Mesh3dLibrary {
+		//std::unordered_map<uint64_t, 
 	};
 }

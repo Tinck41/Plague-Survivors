@@ -225,7 +225,8 @@ RenderModule::RenderModule(flecs::world& world) {
 
 	world.component<DefaultUniform>();
 	world.component<PhaseContext>();
-	world.component<Material>();
+	world.component<Material>()
+		.add(flecs::OnInstantiate, flecs::Inherit);
 	world.component<RenderPhase>();
 	world.component<RenderPhaseExtractor>();
 	world.component<RenderPhaseSorter>();
@@ -335,6 +336,10 @@ RenderPhaseRenderer se::create_default_renderer() {
 
 					SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_buffer_binding, 1);
 					SDL_BindGPUIndexBuffer(render_pass, &index_buffer_binding, context->index_element_size);
+
+					if (context->storage_buffer) {
+						SDL_BindGPUVertexStorageBuffers(render_pass, 0, &context->storage_buffer, 1);
+					}
 				}
 
 				if (item.material_id != last_material) {

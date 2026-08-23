@@ -79,6 +79,7 @@ void default_init(flecs::world& world) {
 			mesh3d_phase.set(create_mesh3d_uploader());
 
 			mesh3d_phase.add<ExtractedMeshes3d>();
+			mesh3d_phase.add<UploadedMeshes3d>();
 
 			transparent_3d.set(create_default_sorter());
 			transparent_3d.set(create_default_renderer());

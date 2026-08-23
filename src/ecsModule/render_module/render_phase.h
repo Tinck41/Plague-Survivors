@@ -33,10 +33,15 @@ namespace se {
 	};
 
 	struct PhaseContext {
-		SDL_GPUBuffer* index_buffer;
-		SDL_GPUBuffer* vertex_buffer;
+		SDL_GPUBuffer* index_buffer = nullptr;
+		SDL_GPUBuffer* vertex_buffer = nullptr;
+		SDL_GPUBuffer* storage_buffer = nullptr;
 
-		SDL_GPUTransferBuffer* transfer_buffer;
+		size_t num_indices  = 0;
+		size_t num_vertices = 0;
+		size_t num_instances = 0;
+
+		SDL_GPUTransferBuffer* transfer_buffer = nullptr;
 
 		SDL_GPUIndexElementSize index_element_size;
 	};
