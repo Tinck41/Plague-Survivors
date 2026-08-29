@@ -36,14 +36,17 @@ EditorModule::EditorModule(flecs::world& world) {
 			it.world().defer_suspend();
 			im.begin(
 				"dockspace",
-				editor::Immediate::Window::Flags::NoResize |
-				editor::Immediate::Window::Flags::NoMove |
-				editor::Immediate::Window::Flags::NoTitlebar |
-				editor::Immediate::Window::Flags::NoClose |
-				editor::Immediate::Window::Flags::NoCollapse, 
+				editor::Immediate::WindowFlags_NoResize    |
+				editor::Immediate::WindowFlags_NoMove      |
+				editor::Immediate::WindowFlags_NoTitlebar  |
+				editor::Immediate::WindowFlags_NoClose     |
+				editor::Immediate::WindowFlags_NoCollasee  | 
+				editor::Immediate::WindowFlags_FitViewport | 
+				editor::Immediate::WindowFlags_NoDocking   |
+				editor::Immediate::WindowFlags_FixedFocus, 
 				{}, size
 			);
-			im.dockspace();
+			im.dockspace("dockspace_dockspace", glm::vec2(0, 0));
 			im.end();
 			im.begin("test");
 
@@ -55,8 +58,13 @@ EditorModule::EditorModule(flecs::world& world) {
 
 			im.begin("test_dock");
 
+			//im.dockspace("dockspace_test_dock", glm::vec2(0, 0));
 			im.text("just to check");
 
+			im.end();
+			im.begin("test_3");
+			im.end();
+			im.begin("test_5");
 			im.end();
 			it.world().defer_resume();
 		});

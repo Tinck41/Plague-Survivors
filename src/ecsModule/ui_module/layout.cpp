@@ -135,7 +135,7 @@ void LayoutComposer::calculate_grow_shrink_width() {
 		}
 
 		for (size_t i = node.first_child; i < node.first_child + node.children_num; ++i) {
-			if (node.horizontal) {
+			if (node.horizontal && !nodes[i].absolute) { // TODO: maybe we should skip only absolute && fixed?
 				remaining_size -= nodes[i].size.x;
 			}
 
@@ -271,7 +271,7 @@ void LayoutComposer::calculate_grow_shrink_height() {
 		}
 
 		for (size_t i = node.first_child; i < node.first_child + node.children_num; ++i) {
-			if (!node.horizontal) {
+			if (!node.horizontal && !nodes[i].absolute) {
 				remaining_size -= nodes[i].size.y;
 			}
 
@@ -504,6 +504,10 @@ void LayoutComposer::calculate_positions() {
 }
 
 void LayoutComposer::bfs(std::vector<LayoutNode>& nodes, std::function<void(LayoutNode&)> callback) {
+    if (nodes_num == 1) {
+        return;
+    }
+    
 	for (size_t i = 1; i < nodes_num + 1; ++i) {
 		if (!nodes[i].display) {
 			continue;

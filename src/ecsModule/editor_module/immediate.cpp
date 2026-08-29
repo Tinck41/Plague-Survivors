@@ -6,8 +6,10 @@
 #include "ecsModule/inputModule/module.h"
 #include "ecsModule/windowModule/module.h"
 #include "gtx/easing.hpp"
+#include "spdlog/spdlog.h"
 #include "utils/visit.h"
 
+#include <algorithm>
 #include <format>
 #include <queue>
 #include <ranges>
@@ -22,37 +24,50 @@ constexpr float PREVIEW_WIDGET_LAYER     = 1.0f;
 constexpr float DOCK_OPTION_WIDGET_LAYER = 2.0f;
 
 // TODO:
-// [x] PushID()/PopID()
-// [x] PushStyle()/PopStyle()
-// [x] Docking
-// [x] remove drag/drop_id
+// [ ] PushID()/PopID()
+// [ ] PushStyle()/PopStyle()
+// [ ] PushLayer()/PopLayer() ????
+// [ ] Docking
+//  - [x] change aspect ratio
+// [ ] remove drag/drop_id
 
 void Immediate::init(flecs::world& world) {
 	ctx.world = &world;
 	ctx.root = world.entity("immediate_root").add(flecs::OrderedChildren);
 	ctx.update_query = world.query_builder<Immediate, ImmediateId, Node, SizeStrategy, Transform, GlobalTransform>().term_at(0).inout().build();
+	ctx.cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+	ctx.cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
+	ctx.last_cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
+
+	SDL_SetCursor(ctx.cursor);
 }
 
-void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos, std::optional<glm::vec2> size) {
+void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::vec2> pos, std::optional<glm::vec2> size) {
 	const auto id = hash(name);
 
 	if (!ctx.id_to_window.contains(id)) {
+		const auto focus_order = ctx.id_to_window.size();
+
 		ctx.id_to_window[id] = {
 			.id = id,
 			//.entity = window_widget->entity,
+			.focus_order = focus_order,
 			.name = name,
 			.size = initial_window_size,
-			.flags = (Window::Flags)flags,
+			.flags = flags,
 		};
+
+		ctx.windows_focus_order.push_back(&ctx.id_to_window.at(id));
 	}
 
-	auto& window = ctx.id_to_window[id];
+	auto& window = ctx.id_to_window.at(id);
 
-	ctx.active_window = &window;
-	ctx.windows.push_back(&window);
+	ctx.current_window = &window;
 
 	if (window.dock_node_id) {
 		const auto dock_node = get_dock_node(window.dock_node_id.value());
+
+		assert(dock_node);
 
 		window.pos = dock_node->position;
 		window.size = dock_node->size;
@@ -62,13 +77,19 @@ void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos,
 		return;
 	}
 
-	auto window_widget = create_widget(name, WidgetFlags::Clickable);
+	if (window.dock_node_id) {
+		const auto dock_node = get_dock_root_node(window.dock_node_id.value());
+
+		push_parent(dock_node->widget_id);
+	}
+
+	auto window_widget = create_widget(name, WidgetFlags_Clickable);
 
 	push_parent(window_widget);
 
-	const auto no_titlebar = flags & Window::Flags::NoTitlebar;
-	const auto no_move = flags & Immediate::Window::Flags::NoMove;
-	const auto no_resize = flags & Immediate::Window::Flags::NoResize;
+	const auto no_titlebar = static_cast<bool>(flags & WindowFlags_NoTitlebar);
+	const auto no_move = static_cast<bool>(flags & WindowFlags_NoMove);
+	const auto no_resize = static_cast<bool>(flags & WindowFlags_NoResize);
 
 	if (is_new(*window_widget)) {
 		window_widget->entity
@@ -82,7 +103,24 @@ void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos,
 				.border_width = 1.f,
 			});
 
-		if (size) {
+		if (static_cast<bool>(flags & WindowFlags_FitViewport)) {
+			const auto main_window = ctx.world->get<WindowModule>().main_window;
+
+			int width;
+			int height;
+
+			SDL_GetWindowSize(main_window, &width, &height);
+
+			window.size.x = static_cast<float>(width);
+			window.size.y = static_cast<float>(height);
+
+			window_widget->entity
+				.set<SizeStrategy>({
+					.x = Fixed{ window.size.x },
+					.y = Fixed{ window.size.y },
+				});
+		}
+		else if (size) {
 			window_widget->entity
 				.set<SizeStrategy>({
 					.x = Fixed{ size.value().x },
@@ -108,15 +146,40 @@ void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos,
 		}
 	}
 
+	if (static_cast<bool>(flags & WindowFlags_FitViewport)) {
+		const auto main_window = ctx.world->get<WindowModule>().main_window;
+
+		int width;
+		int height;
+
+		SDL_GetWindowSize(main_window, &width, &height);
+
+		window.size.x = static_cast<float>(width);
+		window.size.y = static_cast<float>(height);
+	}
+
 	if (!no_move && drag_interaction(window_widget)) {
 		const auto delta = ctx.mouse_input.position - last_ctx.mouse_input.position;
 
 		if (window.dock_node_id) {
-			get_dock_root_node(window.dock_node_id.value())->position += delta;
+			const auto root = get_dock_root_node(window.dock_node_id.value());
+
+			if (root->host_window != 0) {
+				auto& host_window = ctx.id_to_window.at(root->host_window);
+
+				if (!static_cast<bool>(host_window.flags & WindowFlags_NoMove)) {
+					root->position += delta;
+				}
+			}
+			else {
+			  root->position += delta;
+			}
 		}
 		else {
 			window.pos += delta;
 		}
+
+		focus_window(window);
 	}
 
 	if (!no_titlebar) {
@@ -128,7 +191,29 @@ void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos,
 		}
 	}
 
-	if (!window.collapsed) {
+	if (!no_resize && !window.dock_node_id && !window.colapsed) {
+		auto resize_button_widget = create_widget(std::format("{}_resize_button", name), WidgetFlags_Clickable);
+
+		if (is_new(*resize_button_widget)) {
+			resize_button_widget->entity
+				.set<BackgroundColor>(RED)
+				.set(GrowDirection::Horizontal)
+				.set<SizeStrategy>({
+					.x = Fixed{ 10.f },
+					.y = Fixed{ 10.f },
+				})
+				.set<Node>({
+					.self_alignment = { 1.f, 1.f },
+					.absolute = true,
+				});
+		}
+
+		if (drag_interaction(resize_button_widget)) {
+			window.size += ctx.mouse_input.position - last_ctx.mouse_input.position;
+		}
+	}
+
+	if (!window.colapsed) {
 		auto content_widget = create_widget(std::format("{}_content", name));
 
 		push_parent(content_widget);
@@ -144,53 +229,60 @@ void Immediate::begin(std::string name, int flags, std::optional<glm::vec2> pos,
 					.overflow = { Node::Overflow::Clip, Node::Overflow::Clip },
 				});
 		}
-
-		if (!no_resize && !window.dock_node_id) {
-			auto resize_button_widget = create_widget(std::format("{}_resize_button", name), WidgetFlags::Clickable);
-
-			if (is_new(*resize_button_widget)) {
-				resize_button_widget->entity
-					.set<BackgroundColor>(RED)
-					.set(GrowDirection::Horizontal)
-					.set<SizeStrategy>({
-						.x = Fixed{ 10.f },
-						.y = Fixed{ 10.f },
-					})
-					.set<Node>({
-						.self_alignment = { 1.f, 1.f },
-						.absolute = true,
-					});
-			}
-
-			if (drag_interaction(resize_button_widget)) {
-				window.size += ctx.mouse_input.position - last_ctx.mouse_input.position;
-			}
-		}
 	}
+
+	push_parent(window_widget);
+
+	const auto overlay_widget = create_widget(std::format("{}_overlay", name));
+
+	if (is_new(*overlay_widget)) {
+		overlay_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<SizeStrategy>({
+				.x = Grow{},
+				.y = Grow{},
+			})
+			.set<Node>({
+				.absolute = true,
+			});
+
+		window.overlay_id = overlay_widget->id;
+	}
+
+	pop_parent();
 }
 
 void Immediate::end() {
-	if (!ctx.active_window->disabled) {
-		if (!ctx.active_window->collapsed) {
+	const auto window = ctx.current_window;
+
+	if (!window->disabled) {
+		if (!window->colapsed) {
 			pop_parent(); // content entity
+
+			if (!window->dock_node_id && !static_cast<bool>(window->flags & WindowFlags_NoMove)) {
+				grip_window_borders(*window);
+			}
 		}
+
 		pop_parent(); // window entity
+
+		if (window->dock_node_id) {
+			pop_parent();
+		}
 	}
 
-	ctx.active_window = nullptr;
+	ctx.current_window = nullptr;
 }
 
-void Immediate::dockspace() {
-	auto& active_window = *ctx.active_window;
+void Immediate::dockspace(const std::string& name, glm::vec2 size) {
+	const auto id = hash(name);
+	auto& active_window = *ctx.current_window;
 
-	if (active_window.disabled || active_window.collapsed) {
+	if (active_window.disabled || active_window.colapsed) {
 		return;
 	}
 
-	const auto dockspace_widget = create_widget("dokspace", WidgetFlags::Clickable);
-	const auto dock_node = !active_window.dock_node_id
-		? create_dock_root(active_window.pos, active_window.size)
-		: get_dock_node(active_window.dock_node_id.value());
+	const auto dockspace_widget = create_widget(name, WidgetFlags_Clickable);
 
 	if (is_new(*dockspace_widget)) {
 		dockspace_widget->entity
@@ -198,33 +290,52 @@ void Immediate::dockspace() {
 			.set<BackgroundColor>(Color::from_uint(40, 40, 40, 255))
 			.set<BorderColor>(Color::from_hex("#504945"))
 			.set(GrowDirection::Horizontal)
-			.set<SizeStrategy>({
-				.x = Grow{},
-				.y = Grow{},
-			})
 			.set<Node>({
-				.padding = { 4.f, 4.f, 4.f, 4.f },
 				.border_radius = 4.f,
 				.border_width = 1.f,
 			});
+
+		if (size != glm::vec2(0.f, 0.f)) {
+			dockspace_widget->entity.set<SizeStrategy>({
+				.x = Fixed{ size.x },
+				.y = Fixed{ size.y },
+			});
+		}
+		else {
+			dockspace_widget->entity.set<SizeStrategy>({
+				.x = Grow{},
+				.y = Grow{},
+			});
+		}
+
+		const auto dock_node = create_dock_root(id, active_window.pos, active_window.size);
 
 		dock_node->dockspace = true;
 		dock_node->central_node = true;
 		dock_node->central_node_id = dock_node->id;
 		dock_node->widget_id = dockspace_widget->id;
+		dock_node->host_window = active_window.id;
+		dock_node->focus_order = active_window.focus_order;
 
-		active_window.dock_node_id = dock_node->id;
+		active_window.dock_node_host_id = id;
 	}
+
+	const auto dock_node = get_dock_node(id);
+	const auto& pos = dockspace_widget->entity.ensure<GlobalTransform>().translation;
+	const auto& node_size = dockspace_widget->entity.ensure<Node>().size;
+
+	dock_node->position = glm::vec2(pos);
+	dock_node->size = node_size;
 }
 
 bool Immediate::button(std::string name) {
-	const auto& active_window = *ctx.active_window;
+	const auto& active_window = *ctx.current_window;
 
-	if (active_window.disabled || active_window.collapsed) {
+	if (active_window.disabled || active_window.colapsed) {
 		return false;
 	}
 
-	auto button_widget = create_widget(name, WidgetFlags::Clickable);
+	auto button_widget = create_widget(name, WidgetFlags_Clickable);
 
 	if (is_new(*button_widget)) {
 		button_widget->entity
@@ -247,9 +358,9 @@ bool Immediate::button(std::string name) {
 }
 
 void Immediate::text(std::string text) {
-	const auto& active_window = *ctx.active_window;
+	const auto& active_window = *ctx.current_window;
 
-	if (active_window.disabled || active_window.collapsed) {
+	if (active_window.disabled || active_window.colapsed) {
 		return;
 	}
 
@@ -275,9 +386,69 @@ void Immediate::begin_frame() {
 	const auto& input = ctx.world->get<Input>();
 
 	ctx.mouse_input = input.mouse;
+	ctx.general_overlay_widget = create_widget("overlay_widget");
+
+	if (ctx.mouse_input.left.pressed) {
+		ctx.drag_drop_ctx.start_pos = ctx.mouse_input.position;
+	}
+
+	for (const auto root_id : ctx.dock_ctx.roots) {
+		const auto root = get_dock_node(root_id);
+
+		if (root->dockspace) {
+			continue;
+		}
+
+		const auto root_widget = create_widget(std::format("dock_{}_widget", root_id));
+
+		root->widget_id = root_widget->id;
+
+		if (is_new(*root_widget)) {
+			root_widget->entity
+				.add<Node>()
+				.set(GrowDirection::Horizontal)
+				.set<SizeStrategy>({
+					.x = Fixed{ root->size.x },
+					.y = Fixed{ root->size.y },
+				});
+		}
+
+		auto& size = root_widget->entity.ensure<SizeStrategy>();
+		auto& transform = root_widget->entity.ensure<Transform>();
+
+		size.x = Fixed{ root->size.x };
+		size.y = Fixed{ root->size.y };
+		transform.translation = glm::vec3(root->position, transform.translation.z);
+	}
 }
 
 void Immediate::end_frame() {
+	for (const auto root_id : ctx.dock_ctx.roots) {
+		const auto root = get_dock_node(root_id);
+
+		push_parent(root->widget_id);
+
+		const auto root_overlay_widget = create_widget(std::format("dock_{}_widget_overlay", root_id));
+
+		root->overlay_widget_id = root_overlay_widget->id;
+
+		if (is_new(*root_overlay_widget)) {
+			root_overlay_widget->entity
+				.set<Node>({
+					.absolute = true,
+				})
+				.set(GrowDirection::Horizontal)
+				.set<SizeStrategy>({
+					.x = Grow{},
+					.y = Grow{},
+				});
+		}
+
+		grip_dock_borders(*root);
+
+		pop_parent();
+	}
+
 	assert(ctx.parent_stack.empty());
 
 	process_drag_drop();
@@ -289,8 +460,22 @@ void Immediate::end_frame() {
 
 	update_dock_nodes();
 
-	calculate_dfs_indices();
-	calculate_bfs_indices();
+	auto render_queue = compose_render_queue();
+
+	ctx.hot_widget = nullptr;
+
+	calculate_dfs_indices(render_queue);
+	calculate_bfs_indices(render_queue);
+
+	if (ctx.cursor_type != ctx.last_cursor_type) {
+		SDL_DestroyCursor(ctx.cursor);
+
+		ctx.cursor = SDL_CreateSystemCursor(ctx.cursor_type);
+
+		SDL_SetCursor(ctx.cursor);
+	}
+	ctx.last_cursor_type = ctx.cursor_type;
+	ctx.cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
 
 	ctx.update_query.run([](flecs::iter& it) {
 		while (it.next()) {
@@ -322,7 +507,7 @@ void Immediate::end_frame() {
 				if (im.ctx.id_to_window.contains(id)) {
 					const auto& window = im.ctx.id_to_window[id];
 
-					if (window.collapsed) {
+					if (window.colapsed) {
 						size.y = Fit{};
 					}
 					else {
@@ -337,15 +522,10 @@ void Immediate::end_frame() {
 	});
 
 	last_ctx = ctx;
-	ctx.windows.clear();
-	ctx.widgets.clear();
 	ctx.roots.clear();
+	ctx.dock_ctx.fresh_docks.clear();
 
-	ctx.hot_widget = nullptr;
-
-	ctx.widget_num = 0;
-
-	ctx.active_window = nullptr;
+	ctx.current_window = nullptr;
 	//ctx.dock_ctx.payload.docked_target.reset();
 
 	++ctx.frame_count;
@@ -431,22 +611,10 @@ Immediate::Widget* Immediate::create_widget(std::string_view name, WidgetFlags f
 
 	widget->last_active_frame = ctx.frame_count;
 
-	if (flags & WidgetFlags::Clickable) {
-		const auto& mouse_input = ctx.mouse_input;
-
-		if (mouse_input.position.x > widget->last_rect.x && mouse_input.position.x < widget->last_rect.z &&
-			mouse_input.position.y > widget->last_rect.y && mouse_input.position.y < widget->last_rect.w
-		) {
-			ctx.hot_widget = widget;
-		}
-	}
-
 	return widget;
 }
 
 void Immediate::insert_widget_in_tree(Widget* widget, Widget* parent) {
-	ctx.widgets.push_back(widget);
-
 	if (parent != nullptr) {
 		if (parent->first == nullptr) {
 			parent->first = widget;
@@ -463,7 +631,7 @@ void Immediate::insert_widget_in_tree(Widget* widget, Widget* parent) {
 		widget->entity.child_of(parent->entity);
 	}
 	else {
-		ctx.roots.push_back(widget);
+		widget->entity.child_of(ctx.root);
 	}
 }
 
@@ -504,15 +672,61 @@ void Immediate::bfs(std::span<Widget*> roots, const std::function<void(Widget*)>
 	}
 }
 
-void Immediate::calculate_dfs_indices() {
-	if (ctx.widgets.empty()) {
+std::vector<Immediate::HashId> Immediate::compose_render_queue() {
+	const auto& dock_roots = ctx.dock_ctx.roots;
+	const auto& windows = ctx.windows_focus_order;
+
+	std::vector<WidgetGroup> render_groups;
+
+	for (const auto window : windows) {
+		if (window->dock_node_id && !ctx.dock_ctx.fresh_docks.contains(window->dock_node_id.value())) {
+			continue;
+		}
+
+		render_groups.push_back({
+			.widgets = { window->id },
+			.sort_value = window->focus_order,
+		});
+	}
+
+	for (const auto root_id : dock_roots) {
+		const auto root = get_dock_node(root_id);
+
+		// Dockspaces handled through the windows
+		if (root->widget_id == 0 || root->dockspace) {
+			continue;
+		}
+
+		render_groups.push_back({
+			.widgets = { root->widget_id },
+			.sort_value = root->focus_order,
+		});
+	}
+
+	std::ranges::sort(render_groups, {}, &WidgetGroup::sort_value);
+
+	std::vector<HashId> result;
+
+	for (const auto& group : render_groups) {
+		result.append_range(group.widgets);
+	}
+
+	children(ctx.general_overlay_widget, [&](Widget* child) {
+		result.push_back(child->id);
+	});
+
+	return result;
+}
+
+void Immediate::calculate_dfs_indices(const std::vector<HashId>& render_queue) {
+	if (render_queue.empty()) {
 		return;
 	}
 
 	size_t dfs_index = 0;
 
-	for (const auto& root : ctx.roots) {
-		dfs(root, [&](Widget* widget) {
+	for (const auto widget_id : render_queue) {
+		dfs(&ctx.id_to_widget.at(widget_id), [&](Widget* widget) {
 			if (!widget) {
 				return;
 			}
@@ -521,28 +735,45 @@ void Immediate::calculate_dfs_indices() {
 
 			index.dfs = dfs_index++;
 			index.external_dfs_source = true;
+
+			if (widget->flags & WidgetFlags_Clickable) {
+				const auto& mouse_input = ctx.mouse_input;
+
+				if (mouse_input.position.x > widget->last_rect.x && mouse_input.position.x < widget->last_rect.z &&
+					mouse_input.position.y > widget->last_rect.y && mouse_input.position.y < widget->last_rect.w
+				) {
+					ctx.hot_widget = widget;
+				}
+			}
 		});
 	}
 }
 
-void Immediate::calculate_bfs_indices() {
-	if (ctx.widgets.empty()) {
+void Immediate::calculate_bfs_indices(const std::vector<HashId>& render_queue) {
+	if (render_queue.empty()) {
 		return;
+	}
+
+	std::vector<Widget*> widgets;
+
+	widgets.reserve(render_queue.size());
+
+	for (const auto widget_id : render_queue) {
+		widgets.push_back(&ctx.id_to_widget.at(widget_id));
 	}
 
 	size_t bfs_index = 0;
 
-	bfs(ctx.roots, [&](Widget* widget) {
-			if (!widget) {
-				return;
-			}
-
-			auto& index = widget->entity.ensure<NodeIndex>();
-
-			index.bfs = bfs_index++;
-			index.external_bfs_source = true;
+	bfs(widgets, [&](Widget* widget) {
+		if (!widget) {
+			return;
 		}
-	);
+
+		auto& index = widget->entity.ensure<NodeIndex>();
+
+		index.bfs = bfs_index++;
+		index.external_bfs_source = true;
+	});
 }
 
 void Immediate::clear_inactive_widgets() {
@@ -575,19 +806,21 @@ void Immediate::clear_inactive_animations() {
 }
 
 void Immediate::process_drag_drop() {
-	if (ctx.drag_drop_ctx.state == DragAndDropContext::State::None) {
+	if (ctx.drag_drop_ctx.state == DragAndDropState_None || !ctx.dock_ctx.payload.docked_target) {
 		return;
 	}
 
 	const auto& mouse_input = ctx.mouse_input;
 	auto& payload = ctx.dock_ctx.payload;
 
-	for (const auto& window : ctx.windows | std::ranges::views::reverse) {
-		if (window->disabled || window->collapsed) {
+	std::optional<DockTarget> target;
+
+	for (const auto& window : ctx.windows_focus_order | std::ranges::views::reverse) {
+		if (window->disabled || window->colapsed) {
 			continue;
 		}
 
-		const auto skip = ps::visit(payload.docked_target.value(), ps::visitors{
+		const auto skip = se::visit(payload.docked_target.value(), se::visitors{
 			[&](Window* window_target) {
 				return window_target->id == window->id;
 			},
@@ -607,21 +840,45 @@ void Immediate::process_drag_drop() {
 		}
 
 		if (window->dock_node_id) {
-			payload.docking_target = get_dock_node(window->dock_node_id.value());
+			target = get_dock_node(window->dock_node_id.value());
 		}
-		else {
-			payload.docking_target = window;
+		else if (window->dock_node_host_id) {
+			const auto dock_node = get_dock_node(window->dock_node_host_id.value());
+
+			if (auto central_node = get_dock_node(dock_node->central_node_id)) {
+				target = central_node;
+			}
+			else {
+				target = dock_node;
+			}
+		}
+		else if (!static_cast<bool>(window->flags & WindowFlags_NoDocking)) {
+			target = window;
 		}
 
 		break;
 	}
 
+	if (target && std::holds_alternative<DockNode*>(target.value())) {
+		const auto node = std::get<DockNode*>(target.value());
+		const auto root = get_dock_root_node(node->id);
 
-	if (ctx.drag_drop_ctx.state == DragAndDropContext::State::Dragging) {
-		payload.dock_side = DockSide::None;
-		payload.split_axis = SplitAxis::None;
+		bfs(root->id, [&](DockNode* node) {
+			if (mouse_input.position.x < node->position.x || mouse_input.position.x > node->position.x + node->size.x ||
+				mouse_input.position.y < node->position.y || mouse_input.position.y > node->position.y + node->size.y
+			) {
+				return;
+			}
 
-		ps::visit(payload.docking_target.value(), ps::visitors{
+			target = node;
+		});
+	}
+
+	if (ctx.drag_drop_ctx.state == DragAndDropState_Dragging && target) {
+		payload.dock_side = DockSide_None;
+		payload.split_axis = SplitAxis_None;
+
+		se::visit(target.value(), se::visitors{
 			[&](Window* window) {
 				dock_inner_options(window);
 			},
@@ -631,17 +888,46 @@ void Immediate::process_drag_drop() {
 				if (node != root_node) {
 					dock_inner_options(node);
 				}
-				dock_outer_options(node->id);
+				dock_outer_options(root_node->id);
 			}
 		});
 
-		if (payload.split_axis != SplitAxis::None || payload.dock_side != DockSide::None) {
+		if (payload.split_axis != SplitAxis_None || payload.dock_side != DockSide_None) {
 			dock_preview(payload.docking_target.value(), payload.docked_target.value(), payload.split_axis, payload.dock_side);
 		}
 	}
-	else if (ctx.drag_drop_ctx.state == DragAndDropContext::State::Dropping) {
-		if (ctx.dock_ctx.payload.split_axis != SplitAxis::None || ctx.dock_ctx.payload.dock_side != DockSide::None) {
+	else if (ctx.drag_drop_ctx.state == DragAndDropState_Dropping) {
+		if (ctx.dock_ctx.payload.split_axis != SplitAxis_None || ctx.dock_ctx.payload.dock_side != DockSide_None) {
+			se::visit(payload.docked_target.value(), se::visitors{
+				[&](Window* window) {
+					if (window->dock_node_id) {
+						undock_window(*window);
+					}
+				},
+				[](DockNode* node) {
+					// TODO
+				}
+			});
 			apply_dock(payload.docking_target.value(), payload.docked_target.value(), ctx.dock_ctx.payload.split_axis, ctx.dock_ctx.payload.dock_side);
+		}
+		else if (ctx.dock_ctx.payload.docked_target && !ctx.dock_ctx.payload.docking_target) {
+			se::visit(ctx.dock_ctx.payload.docked_target.value(), se::visitors{
+				[&](Window* window) {
+					if (mouse_input.position.x > window->pos.x && mouse_input.position.x < window->pos.x + window->size.x &&
+						mouse_input.position.y > window->pos.y && mouse_input.position.y < window->pos.y + window->size.y
+					) {
+						return;
+					}
+
+					undock_window(*window);
+					focus_window(*window);
+
+					window->pos = ctx.mouse_input.position;
+				},
+				[](DockNode* node) {
+
+				}
+			});
 		}
 		//else if (ctx.id_to_window.at(ctx.drag_drop_ctx.drag_id).dock_node_id) {
 		//	auto& window = ctx.id_to_window.at(ctx.drag_drop_ctx.drag_id);
@@ -651,16 +937,16 @@ void Immediate::process_drag_drop() {
 		//	window.pos = ctx.mouse_input.position;
 		//}
 
-		payload.dock_side = DockSide::None;
-		payload.split_axis = SplitAxis::None;
+		payload.dock_side = DockSide_None;
+		payload.split_axis = SplitAxis_None;
 		payload.docked_target.reset();
 		payload.docking_target.reset();
 
-		ctx.drag_drop_ctx.state = DragAndDropContext::State::None;
+		ctx.drag_drop_ctx.state = DragAndDropState_None;
 	}
 
 	if (mouse_input.left.released) {
-		ctx.drag_drop_ctx.state = DragAndDropContext::State::Dropping;
+		ctx.drag_drop_ctx.state = DragAndDropState_Dropping;
 	}
 }
 
@@ -682,80 +968,6 @@ Immediate::Widget* Immediate::get_parent() {
 	}
 
 	return ctx.parent_stack.top();
-}
-
-bool Immediate::is_widget_pressed(const Widget& widget) {
-	if (widget.id == 0) {
-		return false;
-	}
-
-	const auto& mouse_input = ctx.mouse_input;
-
-	if (!mouse_input.left.pressed) {
-		return false;
-	}
-
-	if (mouse_input.position.x <= widget.last_rect.x || mouse_input.position.x >= widget.last_rect.z ||
-		mouse_input.position.y <= widget.last_rect.y || mouse_input.position.y >= widget.last_rect.w
-	) {
-		return false;
-	}
-
-	return ctx.active_widget->id == widget.id;
-}
-
-bool Immediate::is_widget_released(const Widget& widget) {
-	return false;
-	//if (widget.id == 0) {
-	//	return false;
-	//}
-
-	//const auto& mouse_input = ctx.mouse_input;
-
-	//if (!ctx.last_active_widget) {
-	//	return false;
-	//}
-
-	//if (!mouse_input.left.pressed) {
-	//	return false;
-	//}
-
-	//if (mouse_input.position.x <= widget.last_rect.x || mouse_input.position.x >= widget.last_rect.z ||
-	//	mouse_input.position.y <= widget.last_rect.y || mouse_input.position.y >= widget.last_rect.w
-	//) {
-	//	return false;
-	//}
-
-	//return ctx.last_active_widget.value()->id == widget.id;
-}
-
-bool Immediate::is_widget_down(const Widget& widget) {
-	return false;
-	//if (widget.id == 0) {
-	//	return false;
-	//}
-
-	//const auto& mouse_input = ctx.mouse_input;
-
-	//if (!ctx.last_active_widget) {
-	//	return false;
-	//}
-
-	//if (!mouse_input.left.remain) {
-	//	return false;
-	//}
-
-	//if (ctx.last_active_widget.value()->id == widget.id) {
-	//	return true;
-	//}
-
-	//if (mouse_input.position.x <= widget.last_rect.x || mouse_input.position.x >= widget.last_rect.z ||
-	//	mouse_input.position.y <= widget.last_rect.y || mouse_input.position.y >= widget.last_rect.w
-	//) {
-	//	return false;
-	//}
-
-	//return ctx.last_active_widget.value()->id == widget.id;
 }
 
 bool Immediate::is_widget_hovered(const Widget& widget) {
@@ -781,8 +993,7 @@ bool Immediate::drag_interaction(Widget* widget) {
 
 			ctx.active_widget = nullptr;
 		}
-	}
-	else if (ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
+	} else if (!ctx.active_widget && ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
 		ctx.active_widget = widget;
 	}
 
@@ -796,7 +1007,7 @@ bool Immediate::drag_offset_interaction(Widget* widget, glm::vec2 offset) {
 		if (ctx.mouse_input.left.remain) {
 			const auto delta = glm::abs(ctx.drag_drop_ctx.start_pos - ctx.mouse_input.position);
 
-			result = delta.x > offset.x && delta.y > offset.y;
+			result = delta.x > offset.x || delta.y > offset.y;
 		}
 		else if (ctx.mouse_input.left.released) {
 			result = false;
@@ -804,9 +1015,8 @@ bool Immediate::drag_offset_interaction(Widget* widget, glm::vec2 offset) {
 			ctx.active_widget = nullptr;
 		}
 	}
-	else if (ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
+	else if (!ctx.active_widget && ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
 		ctx.active_widget = widget;
-		ctx.drag_drop_ctx.start_pos = ctx.mouse_input.position;
 	}
 
 	return result;
@@ -820,11 +1030,15 @@ bool Immediate::button_interaction(Widget* widget) {
 
 		ctx.active_widget = nullptr;
 	}
-	else if (ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
+	else if (!ctx.active_widget && ctx.hot_widget == widget && ctx.mouse_input.left.pressed) {
 		ctx.active_widget = widget;
 	}
 
 	return result;
+}
+
+bool Immediate::hover_interaction(Widget* widget) {
+	return !ctx.active_widget && ctx.hot_widget == widget;
 }
 
 bool Immediate::is_collide_with(std::uint64_t left, std::uint64_t right) {
@@ -851,11 +1065,11 @@ void Immediate::titlebar(Window& window) {
 	const auto window_entity = ctx.world->entity(window.entity);
 	const auto name = window.name;
 
-	const auto no_move = window.flags & Window::Flags::NoMove;
-	const auto no_collapse = window.flags & Window::Flags::NoCollapse;
-	const auto no_close = window.flags & Window::Flags::NoClose;
+	const auto no_move = static_cast<bool>(window.flags & WindowFlags_NoMove);
+	const auto no_collasee = static_cast<bool>(window.flags & WindowFlags_NoCollasee);
+	const auto no_close = static_cast<bool>(window.flags & WindowFlags_NoClose);
 
-	auto titlebar_widget = create_widget(std::format("{}_titlebar", name), WidgetFlags::Clickable);
+	auto titlebar_widget = create_widget(std::format("{}_titlebar", name), WidgetFlags_Clickable);
 
 	push_parent(titlebar_widget);
 
@@ -870,19 +1084,21 @@ void Immediate::titlebar(Window& window) {
 			.set<BackgroundColor>(Color::from_hex("#928374"));
 	}
 
-	if (!no_move && drag_interaction(titlebar_widget)) {
+	if (!window.colapsed && !no_move && drag_interaction(titlebar_widget)) {
 		window.pos += ctx.mouse_input.position - last_ctx.mouse_input.position;
 
-		ctx.drag_drop_ctx.state = DragAndDropContext::State::Dragging;
+		ctx.drag_drop_ctx.state = DragAndDropState_Dragging;
 
 		ctx.dock_ctx.payload.docked_target = &window;
+
+		focus_window(window);
 	}
 
-	if (!no_collapse) {
-		auto collapse_button_widget = create_widget(std::format("{}_collapse_button", name), WidgetFlags::Clickable);
+	if (!no_collasee) {
+		auto collasee_button_widget = create_widget(std::format("{}_collasee_button", name), WidgetFlags_Clickable);
 
-		if (is_new(*collapse_button_widget)) {
-			collapse_button_widget->entity
+		if (is_new(*collasee_button_widget)) {
+			collasee_button_widget->entity
 				.add<Node>()
 				.set(GrowDirection::Horizontal)
 				.set<SizeStrategy>({
@@ -892,8 +1108,8 @@ void Immediate::titlebar(Window& window) {
 				.set<BackgroundColor>(Color::from_hex("#282828"));
 		}
 
-		if (button_interaction(collapse_button_widget)) {
-			window.collapsed = !window.collapsed;
+		if (button_interaction(collasee_button_widget)) {
+			window.colapsed = !window.colapsed;
 		}
 	}
 
@@ -923,7 +1139,7 @@ void Immediate::titlebar(Window& window) {
 	}
 
 	if (!no_close) {
-		auto close_button_widget = create_widget(std::format("{}_close_button", name), WidgetFlags::Clickable);
+		auto close_button_widget = create_widget(std::format("{}_close_button", name), WidgetFlags_Clickable);
 
 		if (is_new(*close_button_widget)) {
 			close_button_widget->entity
@@ -955,7 +1171,7 @@ void Immediate::tabsbar(Window& window) {
 		return;
 	}
 
-	const auto tabsbar_widget = create_widget(std::format("{}_tabsbar", window.name), WidgetFlags::Clickable);
+	const auto tabsbar_widget = create_widget(std::format("{}_tabsbar", window.name), WidgetFlags_Clickable);
 	const auto& window_ids = dock_node->windows;
 	const auto active_window = dock_node->active_window;
 
@@ -964,21 +1180,23 @@ void Immediate::tabsbar(Window& window) {
 
 		root_node->position += ctx.mouse_input.position - last_ctx.mouse_input.position;
 
-		ctx.drag_drop_ctx.state = DragAndDropContext::State::Dragging;
+		ctx.drag_drop_ctx.state = DragAndDropState_Dragging;
 		ctx.dock_ctx.payload.docked_target = root_node;
+
+		focus_window(window);
 	}
 
 	push_parent(tabsbar_widget);
 
 	for (const auto window_id : window_ids) {
-		const auto window = &ctx.id_to_window.at(window_id);
-		const auto tab_widget = create_widget(std::format("{}_tab", window->name), WidgetFlags::Clickable);
+		const auto tab_window = &ctx.id_to_window.at(window_id);
+		const auto tab_widget = create_widget(std::format("{}_tab", tab_window->name), WidgetFlags_Clickable);
 		const auto is_active = window_id == active_window;
 
 		push_parent(tab_widget);
 
 		if (is_active) {
-			const auto tab_highlight_widget = create_widget(std::format("{}_tab_highlight", window->name));
+			const auto tab_highlight_widget = create_widget(std::format("{}_tab_highlight", tab_window->name));
 
 			if (is_new(*tab_highlight_widget)) {
 				tab_highlight_widget->entity
@@ -994,7 +1212,7 @@ void Immediate::tabsbar(Window& window) {
 
 		}
 
-		const auto tab_name_widget = create_widget(std::format("{}_tab_name", window->name));
+		const auto tab_name_widget = create_widget(std::format("{}_tab_name", tab_window->name));
 
 		if (is_new(*tab_widget)) {
 			tab_widget->entity
@@ -1011,7 +1229,7 @@ void Immediate::tabsbar(Window& window) {
 			tab_name_widget->entity
 				.add<Node>()
 				.set<ImmediateId>({ tab_name_widget->id })
-				.set<Text>(std::string(window->name))
+				.set<Text>(std::string(tab_window->name))
 				.set<TextFont>({
 					.handle = ctx.world->get_ref<AssetStorage>()->load_font("assets/FreeSans.ttf"),
 					.size = 24,
@@ -1021,34 +1239,47 @@ void Immediate::tabsbar(Window& window) {
 
 		tab_widget->entity.set<BackgroundColor>({ is_active ? Color::from_uint(40, 40, 40, 255) : Color::from_hex("#928374") });
 
-		if (button_interaction(tab_widget)) {
-			dock_node->active_window = window_id;
-		}
-		else if (drag_offset_interaction(tab_widget, glm::vec2(30.f, 30.f))) {
-			ctx.drag_drop_ctx.state = DragAndDropContext::State::Dragging;
+		auto& tab_name_color = tab_name_widget->entity.ensure<TextColor>();
 
-			push_parent(nullptr);
+		if (drag_offset_interaction(tab_widget, glm::vec2(10.f, 10.f))) {
+			ctx.drag_drop_ctx.state = DragAndDropState_Dragging;
+			ctx.dock_ctx.payload.docked_target = tab_window;
+
+			push_parent(ctx.general_overlay_widget);
 
 			const auto drag_tab_widget = create_widget("drab_tab_widget");
 
 			if (is_new(*drag_tab_widget)) {
 				drag_tab_widget->entity
-					.add<Node>()
+					.set<Node>({
+						.border_radius = 4.f,
+						.border_width = 2.f,
+					})
 					.set<ImmediateId>({ drag_tab_widget->id })
 					.set<BackgroundColor>(Color::from_uint(40, 40, 40, 255))
-					.set<BorderColor>(Color::from_hex("#504945"))
+					.set<BorderColor>(Color::from_hex("#d65d0e"))
 					.set(GrowDirection::Horizontal)
 					.set<SizeStrategy>({
 						.x = Fixed{ 100.f },
 						.y = Fixed { 28.f },
-					});
+					})
+					.set<Text>(std::string(window.name))
+					.set<TextFont>({
+						.handle = ctx.world->get_ref<AssetStorage>()->load_font("assets/FreeSans.ttf"),
+						.size = 24,
+					})
+					.set<TextColor>(WHITE);
 			}
 
-			drag_tab_widget->entity.set<Transform>({
-				.translation = glm::vec3{ ctx.mouse_input.position, PREVIEW_WIDGET_LAYER },
-			});
+			auto& transform = drag_tab_widget->entity.ensure<Transform>();
+
+			transform.translation = glm::vec3{ ctx.mouse_input.position, PREVIEW_WIDGET_LAYER };
+			tab_name_color = Color::from_hex("#928374");
 
 			pop_parent();
+		}
+		else {
+			tab_name_color = WHITE;
 		}
 
 		pop_parent();
@@ -1072,7 +1303,7 @@ void Immediate::tabsbar(Window& window) {
 }
 
 void Immediate::dock_inner_options(const DockTarget& docking_target) {
-	const auto [docking_id, docking_pos, docking_size] = ps::visit(docking_target, ps::visitors{
+	const auto [docking_id, docking_pos, docking_size] = se::visit(docking_target, se::visitors{
 		[](Window* window) {
 			return std::tuple{ window->id, window->pos, window->size };
 		},
@@ -1081,7 +1312,7 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 		}
 	});
 
-	push_parent(nullptr);
+	push_parent(ctx.general_overlay_widget);
 
 	constexpr auto name_format = "dockspace_options_{}";
 	const auto background_color = Color::from_uint(69, 133, 136, 180);
@@ -1275,24 +1506,29 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 	}
 
 	if (is_widget_hovered(*top_mid_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Horizontal;
-		ctx.dock_ctx.payload.dock_side  = DockSide::TopLeft;
+		ctx.dock_ctx.payload.split_axis     = SplitAxis_Horizontal;
+		ctx.dock_ctx.payload.dock_side      = DockSide_TopLeft;
+		ctx.dock_ctx.payload.docking_target = docking_target;
 	}
 	else if (is_widget_hovered(*bot_mid_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Horizontal;
-		ctx.dock_ctx.payload.dock_side  = DockSide::BotRight;
+		ctx.dock_ctx.payload.split_axis     = SplitAxis_Horizontal;
+		ctx.dock_ctx.payload.dock_side      = DockSide_BotRight;
+		ctx.dock_ctx.payload.docking_target = docking_target;
 	}
 	else if (is_widget_hovered(*mid_left_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Vertical;
-		ctx.dock_ctx.payload.dock_side  = DockSide::TopLeft;
+		ctx.dock_ctx.payload.split_axis     = SplitAxis_Vertical;
+		ctx.dock_ctx.payload.dock_side      = DockSide_TopLeft;
+		ctx.dock_ctx.payload.docking_target = docking_target;
 	}
 	else if (is_widget_hovered(*mid_right_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Vertical;
-		ctx.dock_ctx.payload.dock_side  = DockSide::BotRight;
+		ctx.dock_ctx.payload.split_axis     = SplitAxis_Vertical;
+		ctx.dock_ctx.payload.dock_side      = DockSide_BotRight;
+		ctx.dock_ctx.payload.docking_target = docking_target;
 	}
 	else if (is_widget_hovered(*mid_mid_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::None;
-		ctx.dock_ctx.payload.dock_side  = DockSide::Center;
+		ctx.dock_ctx.payload.split_axis     = SplitAxis_None;
+		ctx.dock_ctx.payload.dock_side      = DockSide_Center;
+		ctx.dock_ctx.payload.docking_target = docking_target;
 	}
 }
 
@@ -1303,7 +1539,7 @@ void Immediate::dock_outer_options(HashId dockspace_id) {
 		return;
 	}
 
-	push_parent(nullptr);
+	push_parent(ctx.general_overlay_widget);
 
 	const auto background_color = Color::from_uint(69, 133, 136, 180);
 	const auto border_radius = 4.f;
@@ -1335,8 +1571,9 @@ void Immediate::dock_outer_options(HashId dockspace_id) {
 		}
 
 		if (is_widget_hovered(*center_option_widget)) {
-			ctx.dock_ctx.payload.dock_side = DockSide::Center;
-			ctx.dock_ctx.payload.split_axis = SplitAxis::None;
+			ctx.dock_ctx.payload.dock_side      = DockSide_Center;
+			ctx.dock_ctx.payload.split_axis     = SplitAxis_None;
+			ctx.dock_ctx.payload.docking_target = dockspace_node;
 		}
 	}
 
@@ -1416,25 +1653,29 @@ void Immediate::dock_outer_options(HashId dockspace_id) {
 	}
 
 	if (is_widget_hovered(*top_option_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Horizontal;
-		ctx.dock_ctx.payload.dock_side  = DockSide::TopLeft;
+		ctx.dock_ctx.payload.split_axis = SplitAxis_Horizontal;
+		ctx.dock_ctx.payload.dock_side  = DockSide_TopLeft;
+		ctx.dock_ctx.payload.docking_target = dockspace_node;
 	}
 	else if (is_widget_hovered(*bot_option_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Horizontal;
-		ctx.dock_ctx.payload.dock_side  = DockSide::BotRight;
+		ctx.dock_ctx.payload.split_axis = SplitAxis_Horizontal;
+		ctx.dock_ctx.payload.dock_side  = DockSide_BotRight;
+		ctx.dock_ctx.payload.docking_target = dockspace_node;
 	}
 	else if (is_widget_hovered(*left_option_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Vertical;
-		ctx.dock_ctx.payload.dock_side  = DockSide::TopLeft;
+		ctx.dock_ctx.payload.split_axis = SplitAxis_Vertical;
+		ctx.dock_ctx.payload.dock_side  = DockSide_TopLeft;
+		ctx.dock_ctx.payload.docking_target = dockspace_node;
 	}
 	else if (is_widget_hovered(*right_option_widget)) {
-		ctx.dock_ctx.payload.split_axis = SplitAxis::Vertical;
-		ctx.dock_ctx.payload.dock_side  = DockSide::BotRight;
+		ctx.dock_ctx.payload.split_axis = SplitAxis_Vertical;
+		ctx.dock_ctx.payload.dock_side  = DockSide_BotRight;
+		ctx.dock_ctx.payload.docking_target = dockspace_node;
 	}
 }
 
 void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget& docked_target, SplitAxis split_axis, DockSide dock_side) {
-	const auto [docking_id, docking_pos, docking_size] = ps::visit(docking_target, ps::visitors{
+	const auto [docking_id, docking_pos, docking_size] = se::visit(docking_target, se::visitors{
 		[](Window* window) {
 			return std::tuple{ window->id, window->pos, window->size };
 		},
@@ -1443,7 +1684,7 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 		}
 	});
 
-	const auto docked_aspect = ps::visit(docked_target, ps::visitors{
+	const auto docked_aspect = se::visit(docked_target, se::visitors{
 		[](Window* window) {
 			return 0.5f;
 		},
@@ -1452,7 +1693,7 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 		}
 	});
 
-	push_parent(nullptr);
+	push_parent(ctx.general_overlay_widget);
 
 	const auto preview_widget = create_widget(std::format("dock_preview_{}", docking_id));
 
@@ -1461,26 +1702,26 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 	auto target_pos  = docking_pos;
 	auto target_size = docking_size;
 
-	if (split_axis != SplitAxis::None) {
+	if (split_axis != SplitAxis_None) {
 		const auto side_coef = static_cast<float>(dock_side);
 
-		target_size = split_axis == SplitAxis::Horizontal
+		target_size = split_axis == SplitAxis_Horizontal
 			? glm::vec2{ docking_size.x, docking_size.y * docked_aspect }
 			: glm::vec2{ docking_size.x * docked_aspect, docking_size.y };
 
-		target_pos = split_axis == SplitAxis::Horizontal
+		target_pos = split_axis == SplitAxis_Horizontal
 			? glm::vec2{ docking_pos.x, docking_pos.y + target_size.y * side_coef }
 			: glm::vec2{ docking_pos.x + target_size.x * side_coef, docking_pos.y };
 	}
 
 	const auto [edge_pos, edge_size] = [&]() -> std::pair<glm::vec2, glm::vec2> {
-		if (dock_side == DockSide::Center) {
+		if (dock_side == DockSide_Center) {
 			return { docking_pos + docking_size * 0.5f, glm::vec2{ 0.f } };
 		}
 
 		const auto side_coef = static_cast<float>(dock_side);
 
-		if (split_axis == SplitAxis::Horizontal) {
+		if (split_axis == SplitAxis_Horizontal) {
 			return {
 				glm::vec2{ docking_pos.x, docking_pos.y + docking_size.y * side_coef },
 				glm::vec2{ docking_size.x, 0.f },
@@ -1549,6 +1790,19 @@ Immediate::DockNode* Immediate::create_dock_root(glm::vec2 position, glm::vec2 s
 	return &ctx.dock_ctx.node_id_to_node.at(id);
 }
 
+Immediate::DockNode* Immediate::create_dock_root(HashId id, glm::vec2 position, glm::vec2 size) {
+	ctx.dock_ctx.node_id_to_node[id] = DockNode{
+		.id = id,
+		.size = size,
+		.position = position,
+		.root = true,
+	};
+
+	ctx.dock_ctx.roots.emplace_back(id);
+
+	return &ctx.dock_ctx.node_id_to_node.at(id);
+}
+
 Immediate::DockNode* Immediate::create_dock_child(DockNode* parent, DockSide side) {
 	assert(parent != nullptr);
 
@@ -1557,15 +1811,42 @@ Immediate::DockNode* Immediate::create_dock_child(DockNode* parent, DockSide sid
 		.id = ctx.dock_ctx.next_id++,
 	};
 
-	parent->children[side == DockSide::TopLeft ? 0 : 1] = node.id;
+	parent->children[side == DockSide_TopLeft ? 0 : 1] = node.id;
 
 	ctx.dock_ctx.node_id_to_node[node.id] = node;
 
 	return &ctx.dock_ctx.node_id_to_node[node.id];
 }
 
+std::vector<Immediate::HashId> Immediate::get_all_node_windows(DockNode* root) {
+	std::vector<HashId> result;
+
+	bfs(root->id, [&](DockNode* node) {
+		for (const auto window_id : node->windows) {
+			result.push_back(window_id);
+		}
+	});
+
+	return result;
+}
+
 void Immediate::delete_dock_node(HashId dock_node_id) {
 	ctx.dock_ctx.node_id_to_node.erase(dock_node_id);
+}
+
+void Immediate::dock_node_update_ratio(HashId node_id, float new_ratio) {
+	const auto node = get_dock_node(node_id);
+	const auto parent_node = get_dock_node(node->parent_id);
+
+	assert(new_ratio <= 1.f && new_ratio >= 0.f);
+
+	node->aspect_ratio = new_ratio;
+
+	if (parent_node) {
+		const auto other_node = get_dock_node(parent_node->children[0] == node_id ? parent_node->children[1] : parent_node->children[0]);
+
+		other_node->aspect_ratio = 1.f - new_ratio;
+	}
 }
 
 std::pair<Immediate::DockNode*, Immediate::DockNode*> Immediate::split_node(HashId node_id, SplitAxis split_axis) {
@@ -1598,18 +1879,20 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 	//assert(std::get<0>(docking_target) != nullptr || std::get<1>(docking_target) != nullptr);
 	//assert(std::get<0>(docked_target) != nullptr || std::get<1>(docked_target) != nullptr);
 
-	ps::visit(docking_target, ps::visitors{
+	se::visit(docking_target, se::visitors{
 		[&](Window* window) {
-			auto node =  create_dock_root(window->pos, window->size);
+			auto node = create_dock_root(window->pos, window->size);
 
-			ps::visit(docked_target, ps::visitors{
+			node->host_window = window->id;
+
+			se::visit(docked_target, se::visitors{
 				[&](Window* docked_window) {
 					const auto [left_node, right_node] = split_node(node->id, split_axis);
-					const auto aspect_ratio = split_axis == SplitAxis::Horizontal
+					const auto aspect_ratio = split_axis == SplitAxis_Horizontal
 						? docked_window->size.y / window->size.y
 						: docked_window->size.x / window->size.x;
 
-					if (dock_side == DockSide::TopLeft) {
+					if (dock_side == DockSide_TopLeft) {
 						left_node->windows.push_back(docked_window->id);
 						left_node->active_window = docked_window->id;
 						left_node->aspect_ratio = std::min(0.5f, aspect_ratio);
@@ -1633,11 +1916,13 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 						docked_window->dock_node_id = right_node->id;
 						window->dock_node_id = left_node->id;
 					}
+
+					ctx.dock_ctx.fresh_docks.emplace(docked_window->dock_node_id.value());
 				},
 				[&](DockNode* docked_node) {
-					const auto docking_node = create_dock_child(node, dock_side == DockSide::TopLeft ? DockSide::BotRight : DockSide::TopLeft);
+					const auto docking_node = create_dock_child(node, dock_side == DockSide_TopLeft ? DockSide_BotRight : DockSide_TopLeft);
 
-					docked_node->aspect_ratio = split_axis == SplitAxis::Horizontal
+					docked_node->aspect_ratio = split_axis == SplitAxis_Horizontal
 						? docked_node->size.y / window->size.y
 						: docked_node->size.x / window->size.x;
 					docked_node->aspect_ratio = std::min(0.5f, docked_node->aspect_ratio);
@@ -1655,210 +1940,123 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 			});
 		},
 		[&](DockNode* node) {
-			ps::visit(docked_target, ps::visitors{
+			se::visit(docked_target, se::visitors{
 				[&](Window* window) {
-					const auto [left_node, right_node] = split_node(node->id, split_axis);
-					const auto aspect_ratio = split_axis == SplitAxis::Horizontal
-						? window->size.y / node->size.y
-						: window->size.x / node->size.x;
+					if (dock_side == DockSide_Center) {
+						node->windows.push_back(window->id);
+						node->active_window = window->id;
 
-					if (dock_side == DockSide::TopLeft) {
-						left_node->windows.push_back(window->id);
-						left_node->active_window = window->id;
-						left_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+						window->dock_node_id = node->id;
 
-						right_node->aspect_ratio = 1.f - left_node->aspect_ratio;
+						if (node->dockspace) {
+							const auto window_widget = get_widget_by_id(window->id);
 
-						if (node->central_node) {
-							right_node->central_node = true;
-							node->central_node = false;
-
-							get_dock_root_node(node->id)->central_node_id = right_node->id;
+							window_widget->entity.get_ref<Node>()->absolute = false;
 						}
-
-						window->dock_node_id = left_node->id;
 					}
 					else {
-						right_node->windows.push_back(window->id);
-						right_node->active_window = window->id;
-						right_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+						const auto node_windows       = node->windows;
+						const auto node_split         = node->split_axis;
+						const auto node_children      = node->children;
+						const auto node_active_window = node->active_window;
 
-						left_node->aspect_ratio = 1.f - right_node->aspect_ratio;
+						node->windows.clear();
+						node->active_window = 0;
 
-						if (node->central_node) {
-							left_node->central_node = true;
-							node->central_node = false;
+						const auto [left_node, right_node] = split_node(node->id, split_axis);
 
-							get_dock_root_node(node->id)->central_node_id = left_node->id;
+						const auto aspect_ratio = split_axis == SplitAxis_Horizontal
+							? window->size.y / node->size.y
+							: window->size.x / node->size.x;
+
+						if (dock_side == DockSide_TopLeft) {
+							left_node->windows.push_back(window->id);
+							left_node->active_window = window->id;
+							left_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+
+							right_node->aspect_ratio = 1.f - left_node->aspect_ratio;
+							right_node->children = node_children;
+							right_node->windows = node_windows;
+							right_node->active_window = node_active_window;
+							right_node->split_axis = node_split;
+
+							if (node->central_node) {
+								right_node->central_node = true;
+								node->central_node = false;
+
+								get_dock_root_node(node->id)->central_node_id = right_node->id;
+							}
+
+							window->dock_node_id = left_node->id;
+
+							for (auto child_id : node_children) {
+								if (child_id == 0) {
+									continue;
+								}
+
+								get_dock_node(child_id)->parent_id = right_node->id;
+							}
+
+							for (const auto window_id : node_windows) {
+								ctx.id_to_window.at(window_id).dock_node_id = right_node->id;
+							}
 						}
+						else {
+							right_node->windows.push_back(window->id);
+							right_node->active_window = window->id;
+							right_node->aspect_ratio = std::min(0.5f, aspect_ratio);
 
-						window->dock_node_id = right_node->id;
+							left_node->aspect_ratio = 1.f - right_node->aspect_ratio;
+							left_node->children = node_children;
+							left_node->windows = node_windows;
+							left_node->active_window = node_active_window;
+							left_node->split_axis = node_split;
+
+							if (node->central_node) {
+								left_node->central_node = true;
+								node->central_node = false;
+
+								get_dock_root_node(node->id)->central_node_id = left_node->id;
+							}
+
+							window->dock_node_id = right_node->id;
+
+							for (auto child_id : node_children) {
+								if (child_id == 0) {
+									continue;
+								}
+
+								get_dock_node(child_id)->parent_id = left_node->id;
+							}
+
+							for (const auto window_id : node_windows) {
+								ctx.id_to_window.at(window_id).dock_node_id = left_node->id;
+							}
+						}
 					}
-				},
-				[&](DockNode* node) {
 
+					ctx.dock_ctx.fresh_docks.emplace(window->dock_node_id.value());
+				},
+				[&](DockNode* docked_node) {
+					const auto root = create_dock_root(node->position, node->size);
+					const auto docked_index = dock_side == DockSide_TopLeft ? 0 : 1;
+					const auto aspect_ratio = split_axis == SplitAxis_Horizontal
+						? docked_node->size.y / node->size.y
+						: docked_node->size.x / node->size.x;
+
+					root->split_axis                 = split_axis;
+					root->children[    docked_index] = docked_node->id;
+					root->children[1 - docked_index] = node->id;
+
+					docked_node->parent_id    = root->id;
+					docked_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+
+					node->parent_id    = root->id;
+					node->aspect_ratio = 1.f - docked_node->aspect_ratio;
 				}
 			});
 		}
 	});
-	//const auto root_node = get_dock_root_node(docking_node->id);
-
-	//if (dock_side == DockSide::Center) {
-
-	//}
-	//else {
-	//	ps::visit(docked_target, ps::visitors{
-	//		[&](Window* window) {
-	//			const auto [left_node, right_node] = split_node(docking_node->id, split_axis);
-
-	//			if (dock_side == DockSide::TopLeft) {
-	//				left_node->windows.push_back(window->id);
-	//				left_node->active_window = window->id;
-
-	//				ps::visit(docking_target, ps::visitors{
-	//					[&](Window* window) {
-	//						right_node->windows.push_back(window->id);
-	//						right_node->active_window = window->id;
-
-	//						window->dock_node_id = right_node->id;
-	//					},
-	//					[&](DockNode* node) {
-	//						
-	//					}
-	//				});
-
-	//				window->dock_node_id = left_node->id;
-	//			}
-	//			else {
-	//				right_node->windows.push_back(window->id);
-	//				right_node->active_window = window->id;
-
-	//				window->dock_node_id = right_node->id;
-	//			}
-	//		},
-	//		[&](DockNode* node) {
-
-	//		}
-	//	});
-	//	if (docking_node->central_node) {
-	//		docking_node->central_node = false;
-
-	//		const auto central_node = create_dock_child(docking_node, dock_side == DockSide::TopLeft ? DockSide::BotRight : DockSide::TopLeft);
-	//		const auto docked_node = ps::visit(docked_target, ps::visitors{
-	//			[&](Window* window) {
-	//				auto node = create_dock_child(docking_node, dock_side);
-
-	//				node->windows.push_back(window->id);
-	//				node->active_window = window->id;
-
-	//				return node;
-	//			},
-	//			[&](DockNode* node) {
-	//				docking_node->children[static_cast<std::uint8_t>(dock_side)] = node->id;
-	//				node->parent_id = docking_node->id;
-
-	//				return node;
-	//			}
-	//		});
-
-	//		docked_node->aspect_ratio = std::min(0.5f, split_axis == SplitAxis::Horizontal ? docked_node->size.y / docking_node->size.y : docked_node->size.x / docking_node->size.x);
-	//		central_node->aspect_ratio = 1.f - docked_node->aspect_ratio;
-	//		central_node->central_node = true;
-	//		root_node->central_node_id = central_node->id;
-	//	}
-	//	else {
-	//		if (root_node == docking_node) {
-	//			auto [left_node, right_node] = split_node(docking_node->id, split_axis);
-	//			auto docking_window = std::get<Window*>(docking_target);
-
-	//			if (dock_side == DockSide::TopLeft) {
-	//				right_node->windows.push_back(docking_window->id);
-	//				right_node->active_window = docking_window->id;
-
-	//				docking_window->dock_node_id = right_node->id;
-	//			}
-	//			else {
-	//				left_node->windows.push_back(docking_window->id);
-	//				left_node->active_window = docking_window->id;
-
-	//				docking_window->dock_node_id = left_node->id;
-	//			}
-	//		}
-	//		else {
-
-	//		}
-	//	}
-	//}
-
-	//auto root_node = [&] {
-	//	if (ctx.id_to_window.contains(docking_id)) {
-	//		const auto& docked_window = ctx.id_to_window.at(docking_id);
-
-	//		if (!docked_window.dock_node_id) {
-	//			return create_dock_root(docked_window.pos, docked_window.size);
-	//		}
-
-	//		return get_dock_node(docked_window.dock_node_id.value());
-	//	}
-
-	//	return get_dock_node(docking_id);
-	//}();
-
-	//if (dock_side == DockSide::Center) {
-	//	if (root_node->windows.empty()) {
-	//		root_node->windows.push_back(docked_window.id);
-	//	}
-
-	//	root_node->windows.push_back(docking_window.id);
-	//	root_node->active_window = docking_window.id;
-
-	//	for (auto& window_id : root_node->windows) {
-	//		ctx.id_to_window.at(window_id).disabled = true;
-	//	}
-
-	//	docking_window.disabled = false;
-	//	docking_window.dock_node_id = root_node->id;
-	//	docked_window.dock_node_id = root_node->id;
-	//}
-	//else if (root_node->central_node_id != 0) {
-	//	auto [left, right] = split_node(root_node->central_node_id, split_axis);
-
-	//	get_dock_node(root_node->central_node_id)->central_node = false;
-
-	//	if (dock_side == DockSide::TopLeft) {
-	//		left->windows.push_back(docked_window.id);
-	//		left->active_window = docked_window.id;
-
-	//		docking_window.dock_node_id = left->id;
-
-	//		root_node->central_node_id = right->id;
-	//	}
-	//	else {
-	//		right->windows.push_back(docked_window.id);
-	//		right->active_window = docked_window.id;
-
-	//		docking_window.dock_node_id = right->id;
-
-	//		root_node->central_node_id = left->id;
-	//	}
-
-	//	get_dock_node(root_node->central_node_id)->central_node = true;
-	//}
-	//else {
-	//	auto [left, right] = split_node(root_node->id, split_axis);
-
-	//	docking_window.dock_node_id = dock_side == DockSide::TopLeft ? left->id : right->id;
-	//	docked_window.dock_node_id = dock_side == DockSide::TopLeft ? right->id : left->id;
-
-	//	left->windows.push_back(dock_side == DockSide::TopLeft ? docking_window.id : docked_window.id);
-	//	right->windows.push_back(dock_side == DockSide::TopLeft ? docked_window.id : docking_window.id);
-
-	//	left->active_window = dock_side == DockSide::TopLeft ? docking_window.id : docked_window.id;
-	//	right->active_window = dock_side == DockSide::TopLeft ? docked_window.id : docking_window.id;
-
-	//	left->widget_id = dock_side == DockSide::TopLeft ? docking_window.id : docked_window.id;
-	//	right->widget_id = dock_side == DockSide::TopLeft ? docked_window.id : docking_window.id;
-	//}
 }
 
 void Immediate::undock_window(Window& window) {
@@ -1869,6 +2067,7 @@ void Immediate::undock_window(Window& window) {
 	auto dock_node = get_dock_node(window.dock_node_id.value());
 
 	window.dock_node_id.reset();
+	get_widget_by_id(window.id)->entity.get_ref<Node>()->absolute = true;
 
 	if (!dock_node) {
 		return;
@@ -1880,16 +2079,31 @@ void Immediate::undock_window(Window& window) {
 		dock_node->windows.erase(window_it);
 	}
 
-	if (!dock_node->windows.empty()) {
+	if (!dock_node->windows.empty() && dock_node->active_window == window.id) {
 		dock_node->active_window = dock_node->windows.back();
 	}
 }
 
 void Immediate::update_dock_nodes() {
 	std::vector<HashId> nodes_to_delete;
+	std::vector<HashId> roots_to_delete;
 
 	for (auto node_id : ctx.dock_ctx.roots) {
+		const auto root = get_dock_node(node_id);
+
 		bfs(node_id, [&](DockNode* node) {
+			if (node->parent_id != 0 && node->root) {
+				roots_to_delete.push_back(node->id);
+
+				return;
+			}
+
+			if (!static_cast<bool>(ctx.id_to_window.at(root->host_window).flags & WindowFlags_FixedFocus)) {
+				for (const auto window_id : node->windows) {
+					root->focus_order = std::max(root->focus_order, ctx.id_to_window.at(window_id).focus_order);
+				}
+			}
+
 			const auto leaf_node = node->children[0] == 0;
 
 			if (leaf_node && node->windows.empty() && node->central_node_id == 0 && !node->central_node) {
@@ -1899,7 +2113,7 @@ void Immediate::update_dock_nodes() {
 			}
 
 			if (leaf_node) {
-				if (node->parent_id == 0 && node->windows.size() == 1) {
+				if (node->parent_id == 0 && node->windows.size() == 1 && !node->dockspace) {
 					nodes_to_delete.push_back(node->id);
 				}
 				else if (!node->windows.empty()) {
@@ -1911,23 +2125,25 @@ void Immediate::update_dock_nodes() {
 				}
 			}
 			else {
+				const auto size = node->size - ctx.dock_ctx.node_gap;
+
 				for (size_t i = 0; i < node->children.size(); ++i) {
 					const auto child_id = node->children[i];
 
 					const auto multiplier = static_cast<float>(i);
 					const auto child = get_dock_node(child_id);
 
-					child->position = node->position;
+					child->position = node->root ? glm::vec2(0.f) : node->position;
 
-					if (node->split_axis == SplitAxis::Horizontal) {
+					if (node->split_axis == SplitAxis_Horizontal) {
 						child->size.x = node->size.x;
-						child->size.y = node->size.y * child->aspect_ratio;
-						child->position.y += node->size.y * multiplier - child->size.y * multiplier;
+						child->size.y = size.y * child->aspect_ratio;
+						child->position.y += ctx.dock_ctx.node_gap * multiplier + size.y * multiplier - child->size.y * multiplier;
 					}
 					else {
-						child->size.x = node->size.x * child->aspect_ratio;
+						child->size.x = size.x * child->aspect_ratio;
 						child->size.y = node->size.y;
-						child->position.x += node->size.x * multiplier - child->size.x * multiplier;
+						child->position.x += ctx.dock_ctx.node_gap * multiplier + size.x * multiplier - child->size.x * multiplier;
 					}
 				}
 			}
@@ -1948,18 +2164,28 @@ void Immediate::update_dock_nodes() {
 			if (parent->children[0] == node->id) {
 				const auto other_child = get_dock_node(parent->children[1]);
 
-				parent->split_axis = SplitAxis::None;
+				parent->split_axis = SplitAxis_None;
 				parent->windows = other_child->windows;
 				parent->active_window = other_child->active_window;
+
+				if (other_child->central_node) {
+					parent->central_node = other_child->central_node;
+					get_dock_root_node(parent->id)->central_node_id = parent->id;
+				}
 
 				ctx.dock_ctx.node_id_to_node.erase(other_child->id);
 			}
 			else {
 				const auto other_child = get_dock_node(parent->children[0]);
 
-				parent->split_axis = SplitAxis::None;
+				parent->split_axis = SplitAxis_None;
 				parent->windows = other_child->windows;
 				parent->active_window = other_child->active_window;
+
+				if (other_child->central_node) {
+					parent->central_node = other_child->central_node;
+					get_dock_root_node(parent->id)->central_node_id = parent->id;
+				}
 
 				ctx.dock_ctx.node_id_to_node.erase(other_child->id);
 			}
@@ -1986,6 +2212,10 @@ void Immediate::update_dock_nodes() {
 
 		ctx.dock_ctx.node_id_to_node.erase(id);
 	}
+
+	for (auto root_id : roots_to_delete) {
+		std::erase(ctx.dock_ctx.roots, root_id);
+	}
 }
 
 void Immediate::bfs(HashId root, const std::function<void(DockNode*)>& callback) {
@@ -2008,4 +2238,210 @@ void Immediate::bfs(HashId root, const std::function<void(DockNode*)>& callback)
 			queue.push(child_id);
 		}
 	}
+}
+
+void Immediate::focus_window(Window& window) {
+	for (size_t i = window.focus_order + 1; i < ctx.windows_focus_order.size(); ++i) {
+		--ctx.windows_focus_order[i]->focus_order;
+	}
+
+	for (auto [_, window] : ctx.id_to_window) {
+		auto& widget = ctx.id_to_widget[window.id];
+		auto& border_color = widget.entity.ensure<BorderColor>();
+		auto& node = widget.entity.ensure<Node>();
+
+		border_color = Color::from_hex("#504945");
+
+		window.has_focus = false;
+	}
+
+	window.focus_order = ctx.id_to_window.size() - 1;
+	window.has_focus = true;
+
+	auto& widget = ctx.id_to_widget[window.id];
+	auto& border_color = widget.entity.ensure<BorderColor>();
+	auto& node = widget.entity.ensure<Node>();
+
+	border_color = Color::from_hex("#d65d0e");
+}
+
+void Immediate::grip_window_borders(Window& window) {
+	push_parent(window.overlay_id);
+
+	for (int dir = 0; dir < 4; ++dir) {
+		const auto grip_widget = create_widget(std::format("{}_{}_grip", window.name, dir), WidgetFlags_Clickable);
+
+		if (is_new(*grip_widget)) {
+			grip_widget->entity
+				.set(GrowDirection::Horizontal)
+				.set<Node>({
+					.absolute = true,
+				});
+		}
+
+		auto& color      = grip_widget->entity.ensure<BackgroundColor>();
+		auto& transform  = grip_widget->entity.ensure<Transform>();
+		auto& size       = grip_widget->entity.ensure<SizeStrategy>();
+
+		if (dir % 2 == 0) {
+			transform.translation.x = dir == 0 ? -1.f : window.size.x - 2.f;
+
+			size.x = Fixed{ 3.f };
+			size.y = Fixed{ window.size.y };
+		}
+		else {
+			transform.translation.y = dir == 1 ? -1.f : window.size.y - 2.f;
+
+			size.x = Fixed{ window.size.x };
+			size.y = Fixed{ 3.f };
+		}
+
+		if (drag_interaction(grip_widget)) {
+			const auto delta = ctx.mouse_input.position - last_ctx.mouse_input.position;
+
+			color = Color::from_hex("#fbf1c7");
+
+			ctx.cursor_type = dir % 2 == 0 ? SDL_SYSTEM_CURSOR_EW_RESIZE : SDL_SYSTEM_CURSOR_NS_RESIZE;
+
+			if (dir % 2 == 0) {
+				window.pos.x += delta.x * (dir == 0 ? 1.f : 0.f);
+				window.size.x += delta.x * (dir == 0 ? -1.f : 1.f);
+			}
+			else {
+				window.pos.y += delta.y * (dir == 1 ? 1.f : 0.f);
+				window.size.y += delta.y * (dir == 1 ? -1.f : 1.f);
+			}
+		}
+		else if (hover_interaction(grip_widget)) {
+			color = Color::from_hex("#d5c4a1");
+
+			ctx.cursor_type = dir % 2 == 0 ? SDL_SYSTEM_CURSOR_EW_RESIZE : SDL_SYSTEM_CURSOR_NS_RESIZE;
+		}
+		else {
+			color = TRANSPARENT;
+		}
+	}
+
+	pop_parent();
+}
+void Immediate::grip_dock_borders(DockNode& dock_node) {
+	if (dock_node.split_axis == SplitAxis_None) {
+		return;
+	}
+
+	push_parent(dock_node.overlay_widget_id);
+
+	const auto& host_window = ctx.id_to_window[dock_node.host_window];
+
+	if (!static_cast<bool>(host_window.flags & WindowFlags_NoResize)) {
+		for (int dir = 0; dir < 4; ++dir) {
+			const auto grip_widget = create_widget(std::format("{}_{}_grip", host_window.name, dir), WidgetFlags_Clickable);
+
+			if (is_new(*grip_widget)) {
+				grip_widget->entity
+					.set(GrowDirection::Horizontal)
+					.set<Node>({
+						.absolute = true,
+					});
+			}
+
+			auto& color      = grip_widget->entity.ensure<BackgroundColor>();
+			auto& transform  = grip_widget->entity.ensure<Transform>();
+			auto& size       = grip_widget->entity.ensure<SizeStrategy>();
+
+			if (dir % 2 == 0) {
+				transform.translation.x = dir == 0 ? -1.f : dock_node.size.x - 2.f;
+
+				size.x = Fixed{ 3.f };
+				size.y = Fixed{ dock_node.size.y };
+			}
+			else {
+				transform.translation.y = dir == 1 ? -1.f : dock_node.size.y - 2.f;
+
+				size.x = Fixed{ dock_node.size.x };
+				size.y = Fixed{ 3.f };
+			}
+
+			if (drag_interaction(grip_widget)) {
+				const auto delta = ctx.mouse_input.position - last_ctx.mouse_input.position;
+
+				color = Color::from_hex("#fbf1c7");
+
+				ctx.cursor_type = dir % 2 == 0 ? SDL_SYSTEM_CURSOR_EW_RESIZE : SDL_SYSTEM_CURSOR_NS_RESIZE;
+
+				if (dir % 2 == 0) {
+					dock_node.position.x += delta.x * (dir == 0 ? 1.f : 0.f);
+					dock_node.size.x += delta.x * (dir == 0 ? -1.f : 1.f);
+				}
+				else {
+					dock_node.position.y += delta.y * (dir == 1 ? 1.f : 0.f);
+					dock_node.size.y += delta.y * (dir == 1 ? -1.f : 1.f);
+				}
+			}
+			else if (hover_interaction(grip_widget)) {
+				color = Color::from_hex("#d5c4a1");
+
+				ctx.cursor_type = dir % 2 == 0 ? SDL_SYSTEM_CURSOR_EW_RESIZE : SDL_SYSTEM_CURSOR_NS_RESIZE;
+			}
+			else {
+				color = TRANSPARENT;
+			}
+		}
+	}
+
+	bfs(dock_node.id, [&](DockNode* node) {
+		if (node->split_axis == SplitAxis_None) {
+			return;
+		}
+
+		const auto child = get_dock_node(node->children[0]);
+		const auto grip_widget = create_widget(std::format("{}_grip", node->id), WidgetFlags_Clickable);
+
+		if (is_new(*grip_widget)) {
+			grip_widget->entity
+				.set(GrowDirection::Horizontal)
+				.set<Node>({
+					.absolute = true,
+				});
+		}
+
+		auto& color      = grip_widget->entity.ensure<BackgroundColor>();
+		auto& transform  = grip_widget->entity.ensure<Transform>();
+		auto& size       = grip_widget->entity.ensure<SizeStrategy>();
+
+		if (node->split_axis == SplitAxis_Horizontal) {
+			transform.translation.y = (node->root ? 0.f : node->position.y) + (node->size.y - ctx.dock_ctx.node_gap) * child->aspect_ratio;
+			transform.translation.x = node->root ? 0.f : node->position.x;
+			size.x = Fixed{ node->size.x };
+			size.y = Fixed{ ctx.dock_ctx.node_gap * 2.f };
+		}
+		else {
+			transform.translation.x = (node->root ? 0.f : node->position.x) + (node->size.x - ctx.dock_ctx.node_gap) * child->aspect_ratio;
+			transform.translation.y = node->root ? 0.f : node->position.y;
+			size.x = Fixed{ ctx.dock_ctx.node_gap * 2.f };
+			size.y = Fixed{ node->size.y };
+		}
+
+		if (drag_interaction(grip_widget)) {
+			const auto ratio = node->split_axis == SplitAxis_Horizontal
+				? std::min(std::max(ctx.mouse_input.position.y - (dock_node.position.y + (node->root ? 0.f : node->position.y)), 0.f), node->size.y) / node->size.y
+				: std::min(std::max(ctx.mouse_input.position.x - (dock_node.position.x + (node->root ? 0.f : node->position.x)), 0.f), node->size.x) / node->size.x;
+
+			color = Color::from_hex("#fbf1c7");
+
+			ctx.cursor_type = node->split_axis == SplitAxis_Horizontal ? SDL_SYSTEM_CURSOR_NS_RESIZE : SDL_SYSTEM_CURSOR_EW_RESIZE;
+
+			dock_node_update_ratio(child->id, ratio);
+		}
+		else if (hover_interaction(grip_widget)) {
+			color = Color::from_hex("#d5c4a1");
+
+			ctx.cursor_type = node->split_axis == SplitAxis_Horizontal ? SDL_SYSTEM_CURSOR_NS_RESIZE : SDL_SYSTEM_CURSOR_EW_RESIZE;
+		}
+		else {
+			color = TRANSPARENT;
+		}
+	});
+
+	pop_parent();
 }
