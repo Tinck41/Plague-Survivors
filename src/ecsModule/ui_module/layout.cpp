@@ -508,7 +508,7 @@ void LayoutComposer::bfs(std::vector<LayoutNode>& nodes, std::function<void(Layo
         return;
     }
     
-	for (size_t i = 1; i < nodes_num + 1; ++i) {
+	for (size_t i = 1; i < nodes_num; ++i) {
 		if (!nodes[i].display) {
 			continue;
 		}
