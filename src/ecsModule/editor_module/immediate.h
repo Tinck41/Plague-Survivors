@@ -80,8 +80,7 @@ namespace se::editor {
 			bool                  has_focus         = false;
 			bool                  colapsed          = false;
 			bool                  disabled          = false;
-
-			flecs::entity_t       entity;
+			bool                  main_window       = false;
 
 			size_t                focus_order       = 0;
 
@@ -98,30 +97,30 @@ namespace se::editor {
 		struct DockNode {
 			std::vector<HashId>   windows;
 
-			HashId                active_window     = 0;
-			HashId                host_window       = 0;
+			HashId                next_active_window = 0;
+			HashId                active_window      = 0;
+			HashId                host_window        = 0;
 
-			HashId                widget_id         = 0;
-			HashId                overlay_widget_id = 0;
+			HashId                overlay_widget_id  = 0;
 
-			HashId                central_node_id   = 0;
-			HashId                parent_id         = 0;
-			HashId                id                = 0;
+			HashId                central_node_id    = 0;
+			HashId                parent_id          = 0;
+			HashId                id                 = 0;
 
 			std::array<HashId, 2> children;
 
 			glm::vec2             size;
 			glm::vec2             position;
 
-			size_t                focus_order      = 0;
-
 			float                 aspect_ratio     = 1.f;
 
 			bool                  dockspace        = false;
 			bool                  central_node     = false;
 			bool                  root             = false;
+			bool                  skip_next_anims  = false;
 
 			SplitAxis             split_axis;
+			DockSide              dock_side        = DockSide_None;
 
 			bool is_leaf() { return children[0] == 0; };
 		};
@@ -180,10 +179,8 @@ namespace se::editor {
 		};
 
 		struct DockContext {
-			std::unordered_map<HashId, HashId>   widget_id_to_node_id;
 			std::unordered_map<HashId, DockNode> node_id_to_node;
 
-			std::unordered_set<HashId>           fresh_docks; // TODO: need for prevent dock nodes that were just created didn't brake draw order, otherwise window with this id will be skipped.
 			std::vector<HashId>                  roots;
 
 			HashId                               next_id = 1;
@@ -218,6 +215,7 @@ namespace se::editor {
 			flecs::entity                        root;
 
 			flecs::query<>                       update_query;
+			flecs::query<>                       check_query;
 			flecs::world*                        world;
 
 			MouseState                           mouse_input;
@@ -229,7 +227,12 @@ namespace se::editor {
 			SDL_SystemCursor                     last_cursor_type     = SDL_SYSTEM_CURSOR_DEFAULT;
 			SDL_Cursor*                          cursor               = nullptr;
 
+			glm::ivec2                           viewport_size;
+
 			size_t                               frame_count          = 0;
+			size_t                               widgets_num          = 0;
+
+			float                                anim_pop_rate        = 20.f;
 		};
 
 		void                            init(flecs::world& world);
@@ -249,7 +252,8 @@ namespace se::editor {
 		void                            begin_frame();
 		void                            end_frame();
 
-		float                           animation_value(std::string name, float initial, float target, float rate);
+		float                           animation_value(std::string name, float initial, float target, float rate, bool skip = false);
+		glm::vec2                       animation_value(std::string name, glm::vec2 initial, glm::vec2 target, float rate, bool skip = false);
 		float                           animation_precent(std::string name, float initial, float target, float rate);
 
 		HashId                          hash(std::string_view name);
@@ -270,8 +274,8 @@ namespace se::editor {
 
 		std::vector<HashId>             compose_render_queue();
 
-		void                            calculate_dfs_indices(const std::vector<HashId>& render_queue);
-		void                            calculate_bfs_indices(const std::vector<HashId>& render_queue);
+		size_t                          calculate_dfs_indices(const std::vector<HashId>& render_queue);
+		size_t                          calculate_bfs_indices(const std::vector<HashId>& render_queue);
 
 		void                            clear_inactive_widgets();
 		void                            clear_inactive_animations();
@@ -315,6 +319,7 @@ namespace se::editor {
 
 		void                            delete_dock_node(HashId node_id);
 		void                            dock_node_update_ratio(HashId node_id, float new_ratio);
+		void                            dock_node_skip_anims(HashId node_id);
 
 		std::pair<DockNode*, DockNode*> split_node(HashId node_id, SplitAxis split_axis);
 
@@ -322,6 +327,7 @@ namespace se::editor {
 		void                            undock_window(Window& window);
 
 		void                            update_dock_nodes();
+		void                            update_dock_children(DockNode* parent, bool animate);
 
 		void                            bfs(HashId root, const std::function<void(DockNode*)>& callback);
 

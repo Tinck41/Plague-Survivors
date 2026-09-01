@@ -29,12 +29,24 @@ constexpr float DOCK_OPTION_WIDGET_LAYER = 2.0f;
 // [ ] PushLayer()/PopLayer() ????
 // [ ] Docking
 //  - [x] change aspect ratio
+//  - [x] multitab window
+//  - [x] undock with following dock
+//  - [x] animation for dock nodes appearance
+//  - [x] resize dock options according to window size
+//  - [x] preview with dock gap
+//  - [x] foucs window when select tab, cant' be done immediately because selected window widget doesn't exist
+//  - [x] fix bug when dock into center already docked window to another already docked window 
+//  - [x] fix bug when dock to dockspace two docked window [  |  ]
+//  - [x] dock_inner_options - fix padding and create fake widgets
 // [ ] remove drag/drop_id
+// [ ] think about remove all direct acces to entity component
+// [ ] better focus order handling for both window and dock nodes
 
 void Immediate::init(flecs::world& world) {
 	ctx.world = &world;
 	ctx.root = world.entity("immediate_root").add(flecs::OrderedChildren);
-	ctx.update_query = world.query_builder<Immediate, ImmediateId, Node, SizeStrategy, Transform, GlobalTransform>().term_at(0).inout().build();
+	ctx.update_query = world.query_builder<Immediate, ImmediateId, Node, SizeStrategy, Transform, GlobalTransform>().with<GrowDirection>().term_at(0).inout().build();
+	ctx.check_query = world.query_builder<Immediate, ImmediateId, Node>().term_at(0).inout().build();
 	ctx.cursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
 	ctx.cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
 	ctx.last_cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
@@ -50,7 +62,6 @@ void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::ve
 
 		ctx.id_to_window[id] = {
 			.id = id,
-			//.entity = window_widget->entity,
 			.focus_order = focus_order,
 			.name = name,
 			.size = initial_window_size,
@@ -64,23 +75,37 @@ void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::ve
 
 	ctx.current_window = &window;
 
-	if (window.dock_node_id) {
-		const auto dock_node = get_dock_node(window.dock_node_id.value());
-
-		assert(dock_node);
-
-		window.pos = dock_node->position;
-		window.size = dock_node->size;
-	}
-
 	if (window.disabled) {
 		return;
 	}
 
 	if (window.dock_node_id) {
-		const auto dock_node = get_dock_root_node(window.dock_node_id.value());
+		const auto dock_node = get_dock_node(window.dock_node_id.value());
 
-		push_parent(dock_node->widget_id);
+		assert(dock_node);
+
+		const auto [start_pos, start_size] = [&] {
+			if (dock_node->parent_id) {
+				const auto parent = get_dock_node(dock_node->parent_id);
+				const auto side_coef = parent->children[0] == dock_node->id ? 0.f : 1.f;
+
+				const auto pos = parent->split_axis == SplitAxis_Horizontal
+					? glm::vec2{ dock_node->position.x, dock_node->position.y + (parent->size.y - ctx.dock_ctx.node_gap) * side_coef - dock_node->size.y * side_coef }
+					: glm::vec2{ parent->position.x + parent->size.x * side_coef, dock_node->position.y };
+				const auto size = parent->split_axis == SplitAxis_Horizontal
+					? glm::vec2{ dock_node->size.x, 0.f }
+					: glm::vec2{ 0.f, dock_node->size.y };
+
+				return std::pair{ pos, size };
+			}
+
+			return std::pair{ glm::vec2(0.f), dock_node->size };
+		}();
+
+		window.pos = animation_value(std::format("{}_pos", name), start_pos, dock_node->position, ctx.anim_pop_rate, dock_node->skip_next_anims);
+		window.size = animation_value(std::format("{}_size", name), start_size, dock_node->size, ctx.anim_pop_rate, dock_node->skip_next_anims);
+
+		dock_node->skip_next_anims = false;
 	}
 
 	auto window_widget = create_widget(name, WidgetFlags_Clickable);
@@ -93,7 +118,7 @@ void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::ve
 
 	if (is_new(*window_widget)) {
 		window_widget->entity
-			.set<BackgroundColor>(Color::from_uint(40, 40, 40, 255))
+			.set<BackgroundColor>(Color::from_hex("#282828"))
 			.set<BorderColor>(Color::from_hex("#504945"))
 			.set(GrowDirection::Vertical)
 			.set<Node>({
@@ -103,47 +128,34 @@ void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::ve
 				.border_width = 1.f,
 			});
 
-		if (static_cast<bool>(flags & WindowFlags_FitViewport)) {
-			const auto main_window = ctx.world->get<WindowModule>().main_window;
+		if (!window.dock_node_id) {
+			if (static_cast<bool>(flags & WindowFlags_FitViewport)) {
+				window.size.x = static_cast<float>(ctx.viewport_size.x);
+				window.size.y = static_cast<float>(ctx.viewport_size.y);
 
-			int width;
-			int height;
+				window.main_window = true;
+			}
+			else if (size) {
 
-			SDL_GetWindowSize(main_window, &width, &height);
+				window.size = size.value();
+			}
+			else {
+				window.size = initial_window_size;
+			}
 
-			window.size.x = static_cast<float>(width);
-			window.size.y = static_cast<float>(height);
-
-			window_widget->entity
-				.set<SizeStrategy>({
-					.x = Fixed{ window.size.x },
-					.y = Fixed{ window.size.y },
-				});
+			if (pos) {
+				window.pos = pos.value();
+			}
 		}
-		else if (size) {
-			window_widget->entity
-				.set<SizeStrategy>({
-					.x = Fixed{ size.value().x },
-					.y = Fixed{ size.value().y },
-				});
+	}
 
-			window.size = size.value();
-		}
-		else {
-			window_widget->entity
-				.set<SizeStrategy>({
-					.x = Fixed{ initial_window_size.x },
-					.y = Fixed{ initial_window_size.y },
-				});
-		}
+	auto& border_color = window_widget->entity.ensure<BorderColor>();
 
-		if (pos) {
-			window_widget->entity.set<Transform>({
-				.translation  = glm::vec3(pos.value(), 0.f),
-			});
-
-			window.pos = pos.value();
-		}
+	if (window.has_focus) {
+		border_color = Color::from_hex("#d65d0e");
+	}
+	else {
+		border_color = Color::from_hex("#504945");
 	}
 
 	if (static_cast<bool>(flags & WindowFlags_FitViewport)) {
@@ -174,6 +186,8 @@ void Immediate::begin(std::string name, WindowFlags flags, std::optional<glm::ve
 			else {
 			  root->position += delta;
 			}
+
+			dock_node_skip_anims(root->id);
 		}
 		else {
 			window.pos += delta;
@@ -265,10 +279,6 @@ void Immediate::end() {
 		}
 
 		pop_parent(); // window entity
-
-		if (window->dock_node_id) {
-			pop_parent();
-		}
 	}
 
 	ctx.current_window = nullptr;
@@ -287,7 +297,7 @@ void Immediate::dockspace(const std::string& name, glm::vec2 size) {
 	if (is_new(*dockspace_widget)) {
 		dockspace_widget->entity
 			.set<ImmediateId>({ dockspace_widget->id })
-			.set<BackgroundColor>(Color::from_uint(40, 40, 40, 255))
+			.set<BackgroundColor>(Color::from_hex("#282828"))
 			.set<BorderColor>(Color::from_hex("#504945"))
 			.set(GrowDirection::Horizontal)
 			.set<Node>({
@@ -313,9 +323,7 @@ void Immediate::dockspace(const std::string& name, glm::vec2 size) {
 		dock_node->dockspace = true;
 		dock_node->central_node = true;
 		dock_node->central_node_id = dock_node->id;
-		dock_node->widget_id = dockspace_widget->id;
 		dock_node->host_window = active_window.id;
-		dock_node->focus_order = active_window.focus_order;
 
 		active_window.dock_node_host_id = id;
 	}
@@ -372,6 +380,7 @@ void Immediate::text(std::string text) {
 				.x = Fixed{ 10.f },
 				.y = Fixed{ 10.f },
 			})
+			.set(GrowDirection::Horizontal)
 			.set<Text>(std::string(text))
 			.set<TextFont>({
 				.handle = ctx.world->get_ref<AssetStorage>()->load_font("assets/FreeSans.ttf"),
@@ -384,49 +393,26 @@ void Immediate::text(std::string text) {
 
 void Immediate::begin_frame() {
 	const auto& input = ctx.world->get<Input>();
+	const auto main_window = ctx.world->get_ref<WindowModule>()->main_window;
 
 	ctx.mouse_input = input.mouse;
-	ctx.general_overlay_widget = create_widget("overlay_widget");
+	ctx.general_overlay_widget = create_widget("overlay_widget"); // empty holder widget
+
+	SDL_GetWindowSize(main_window, &ctx.viewport_size.x, &ctx.viewport_size.y);
 
 	if (ctx.mouse_input.left.pressed) {
 		ctx.drag_drop_ctx.start_pos = ctx.mouse_input.position;
 	}
 
-	for (const auto root_id : ctx.dock_ctx.roots) {
-		const auto root = get_dock_node(root_id);
-
-		if (root->dockspace) {
-			continue;
-		}
-
-		const auto root_widget = create_widget(std::format("dock_{}_widget", root_id));
-
-		root->widget_id = root_widget->id;
-
-		if (is_new(*root_widget)) {
-			root_widget->entity
-				.add<Node>()
-				.set(GrowDirection::Horizontal)
-				.set<SizeStrategy>({
-					.x = Fixed{ root->size.x },
-					.y = Fixed{ root->size.y },
-				});
-		}
-
-		auto& size = root_widget->entity.ensure<SizeStrategy>();
-		auto& transform = root_widget->entity.ensure<Transform>();
-
-		size.x = Fixed{ root->size.x };
-		size.y = Fixed{ root->size.y };
-		transform.translation = glm::vec3(root->position, transform.translation.z);
-	}
+	process_drag_drop();
+	update_dock_nodes();
 }
 
 void Immediate::end_frame() {
 	for (const auto root_id : ctx.dock_ctx.roots) {
 		const auto root = get_dock_node(root_id);
 
-		push_parent(root->widget_id);
+		push_parent(nullptr);
 
 		const auto root_overlay_widget = create_widget(std::format("dock_{}_widget_overlay", root_id));
 
@@ -437,12 +423,15 @@ void Immediate::end_frame() {
 				.set<Node>({
 					.absolute = true,
 				})
-				.set(GrowDirection::Horizontal)
-				.set<SizeStrategy>({
-					.x = Grow{},
-					.y = Grow{},
-				});
+				.set(GrowDirection::Horizontal);
 		}
+
+		auto& transform = root_overlay_widget->entity.ensure<Transform>();
+		auto& size = root_overlay_widget->entity.ensure<SizeStrategy>();
+
+		transform.translation = glm::vec3(root->position, 0.f);
+		size.x = Fixed{ root->size.x };
+		size.y = Fixed{ root->size.y };
 
 		grip_dock_borders(*root);
 
@@ -451,21 +440,20 @@ void Immediate::end_frame() {
 
 	assert(ctx.parent_stack.empty());
 
-	process_drag_drop();
-
 	if (clear_on_frame_end) {
 		clear_inactive_widgets();
 		clear_inactive_animations();
 	}
 
-	update_dock_nodes();
-
 	auto render_queue = compose_render_queue();
 
 	ctx.hot_widget = nullptr;
 
-	calculate_dfs_indices(render_queue);
-	calculate_bfs_indices(render_queue);
+	const auto total_dfs_indices = calculate_dfs_indices(render_queue);
+	const auto total_bfs_indices = calculate_bfs_indices(render_queue);
+
+	assert(total_bfs_indices == total_dfs_indices);
+	assert(total_bfs_indices == (ctx.widgets_num - 1)); // general_overlay_widget doesn't count
 
 	if (ctx.cursor_type != ctx.last_cursor_type) {
 		SDL_DestroyCursor(ctx.cursor);
@@ -477,7 +465,9 @@ void Immediate::end_frame() {
 	ctx.last_cursor_type = ctx.cursor_type;
 	ctx.cursor_type = SDL_SYSTEM_CURSOR_DEFAULT;
 
-	ctx.update_query.run([](flecs::iter& it) {
+	size_t check_sum = 0;
+
+	ctx.update_query.run([&check_sum](flecs::iter& it) {
 		while (it.next()) {
 			auto& im = it.field<Immediate>(0)[0];
 
@@ -490,6 +480,8 @@ void Immediate::end_frame() {
 			for (auto i : it) {
 				const auto& id = id_field[i].value;
 				auto& node = node_field[i];
+
+				++check_sum;
 
 				if (!im.ctx.id_to_widget.contains(id)) {
 					//node.display = false;
@@ -521,17 +513,39 @@ void Immediate::end_frame() {
 		}
 	});
 
+	assert(total_dfs_indices == check_sum );
+
+	ctx.check_query.run([](flecs::iter& it) {
+		while (it.next()) {
+			auto& im = it.field<Immediate>(0)[0];
+
+			const auto id_field = it.field<ImmediateId>(1);
+			const auto node_field = it.field<Node>(2);
+
+			for (auto i : it) {
+				const auto entity = it.entity(i);
+				const auto& id = id_field[i].value;
+				auto& node = node_field[i];
+
+				assert(entity.has<GrowDirection>());
+				assert(entity.has<SizeStrategy>());
+				assert(entity.has<NodeIndex>());
+				assert(im.ctx.id_to_widget.contains(id));
+			}
+		}
+	});
+
 	last_ctx = ctx;
 	ctx.roots.clear();
-	ctx.dock_ctx.fresh_docks.clear();
 
 	ctx.current_window = nullptr;
+	ctx.widgets_num = 0;
 	//ctx.dock_ctx.payload.docked_target.reset();
 
 	++ctx.frame_count;
 }
 
-float Immediate::animation_value(std::string name, float initial, float target, float rate) {
+float Immediate::animation_value(std::string name, float initial, float target, float rate, bool skip) {
 	const auto key = hash(name);
 
 	if (!ctx.id_to_anim.contains(key)) {
@@ -549,7 +563,18 @@ float Immediate::animation_value(std::string name, float initial, float target, 
 	animation.last_active_frame = ctx.frame_count;
 	animation.current += (animation.target - animation.current) * (1.f - std::pow(2.f, -rate * ctx.world->delta_time()));
 
+	if (skip) {
+		animation.current = animation.target;
+	}
+
 	return animation.current;
+}
+
+glm::vec2 Immediate::animation_value(std::string name, glm::vec2 initial, glm::vec2 target, float rate, bool skip) {
+	return {
+		animation_value(name + "_0", initial.x, target.x, rate, skip),
+		animation_value(name + "_1", initial.y, target.y, rate, skip)
+	};
 }
 
 // TODO
@@ -610,6 +635,8 @@ Immediate::Widget* Immediate::create_widget(std::string_view name, WidgetFlags f
 	insert_widget_in_tree(widget, get_parent());
 
 	widget->last_active_frame = ctx.frame_count;
+
+	++ctx.widgets_num;
 
 	return widget;
 }
@@ -679,27 +706,66 @@ std::vector<Immediate::HashId> Immediate::compose_render_queue() {
 	std::vector<WidgetGroup> render_groups;
 
 	for (const auto window : windows) {
-		if (window->dock_node_id && !ctx.dock_ctx.fresh_docks.contains(window->dock_node_id.value())) {
+		if (window->dock_node_id || window->disabled) {
 			continue;
 		}
 
-		render_groups.push_back({
+		auto group = WidgetGroup{
 			.widgets = { window->id },
 			.sort_value = window->focus_order,
-		});
+		};
+
+		if (window->dock_node_host_id) {
+			const auto node = get_dock_node(window->dock_node_host_id.value());
+
+			bfs(node->id, [&](DockNode* node) {
+				if (node->active_window == 0) {
+					return;
+				}
+
+				const auto& docked_window = ctx.id_to_window.at(node->active_window);
+
+				group.widgets.push_back(docked_window.id);
+
+				if (!window->main_window) {
+					group.sort_value = std::max(docked_window.focus_order, docked_window.focus_order);
+				}
+			});
+
+			group.widgets.push_back(node->overlay_widget_id);
+		}
+
+		render_groups.push_back(group);
 	}
 
 	for (const auto root_id : dock_roots) {
 		const auto root = get_dock_node(root_id);
 
 		// Dockspaces handled through the windows
-		if (root->widget_id == 0 || root->dockspace) {
+		if (root->dockspace) {
 			continue;
 		}
 
+		std::vector<HashId> dock_widgets;
+		size_t sort_value = 0;
+
+		bfs(root_id, [&](DockNode* node) {
+			if (node->active_window == 0) {
+				return;
+			}
+
+			const auto& window = ctx.id_to_window.at(node->active_window);
+
+			dock_widgets.push_back(window.id);
+
+			sort_value = std::max(window.focus_order, sort_value);
+		});
+
+		dock_widgets.push_back(root->overlay_widget_id);
+
 		render_groups.push_back({
-			.widgets = { root->widget_id },
-			.sort_value = root->focus_order,
+			.widgets = dock_widgets,
+			.sort_value = sort_value,
 		});
 	}
 
@@ -718,18 +784,25 @@ std::vector<Immediate::HashId> Immediate::compose_render_queue() {
 	return result;
 }
 
-void Immediate::calculate_dfs_indices(const std::vector<HashId>& render_queue) {
+size_t Immediate::calculate_dfs_indices(const std::vector<HashId>& render_queue) {
 	if (render_queue.empty()) {
-		return;
+		return 0;
 	}
 
 	size_t dfs_index = 0;
+
+	std::unordered_set<flecs::entity_t> proccesed;
 
 	for (const auto widget_id : render_queue) {
 		dfs(&ctx.id_to_widget.at(widget_id), [&](Widget* widget) {
 			if (!widget) {
 				return;
 			}
+
+			const auto name = widget->entity.name();
+			assert(!proccesed.contains(widget->entity));
+
+			proccesed.emplace(widget->entity);
 
 			auto& index = widget->entity.ensure<NodeIndex>();
 
@@ -747,11 +820,13 @@ void Immediate::calculate_dfs_indices(const std::vector<HashId>& render_queue) {
 			}
 		});
 	}
+
+	return dfs_index;
 }
 
-void Immediate::calculate_bfs_indices(const std::vector<HashId>& render_queue) {
+size_t Immediate::calculate_bfs_indices(const std::vector<HashId>& render_queue) {
 	if (render_queue.empty()) {
-		return;
+		return 0;
 	}
 
 	std::vector<Widget*> widgets;
@@ -774,6 +849,8 @@ void Immediate::calculate_bfs_indices(const std::vector<HashId>& render_queue) {
 		index.bfs = bfs_index++;
 		index.external_bfs_source = true;
 	});
+
+	return bfs_index;
 }
 
 void Immediate::clear_inactive_widgets() {
@@ -910,7 +987,7 @@ void Immediate::process_drag_drop() {
 			});
 			apply_dock(payload.docking_target.value(), payload.docked_target.value(), ctx.dock_ctx.payload.split_axis, ctx.dock_ctx.payload.dock_side);
 		}
-		else if (ctx.dock_ctx.payload.docked_target && !ctx.dock_ctx.payload.docking_target) {
+		else if (ctx.dock_ctx.payload.docked_target) {
 			se::visit(ctx.dock_ctx.payload.docked_target.value(), se::visitors{
 				[&](Window* window) {
 					if (mouse_input.position.x > window->pos.x && mouse_input.position.x < window->pos.x + window->size.x &&
@@ -929,13 +1006,6 @@ void Immediate::process_drag_drop() {
 				}
 			});
 		}
-		//else if (ctx.id_to_window.at(ctx.drag_drop_ctx.drag_id).dock_node_id) {
-		//	auto& window = ctx.id_to_window.at(ctx.drag_drop_ctx.drag_id);
-
-		//	undock_window(window);
-
-		//	window.pos = ctx.mouse_input.position;
-		//}
 
 		payload.dock_side = DockSide_None;
 		payload.split_axis = SplitAxis_None;
@@ -1062,7 +1132,6 @@ bool Immediate::is_new(const Widget& widget) {
 }
 
 void Immediate::titlebar(Window& window) {
-	const auto window_entity = ctx.world->entity(window.entity);
 	const auto name = window.name;
 
 	const auto no_move = static_cast<bool>(window.flags & WindowFlags_NoMove);
@@ -1084,12 +1153,14 @@ void Immediate::titlebar(Window& window) {
 			.set<BackgroundColor>(Color::from_hex("#928374"));
 	}
 
-	if (!window.colapsed && !no_move && drag_interaction(titlebar_widget)) {
+	if (!no_move && drag_interaction(titlebar_widget)) {
 		window.pos += ctx.mouse_input.position - last_ctx.mouse_input.position;
 
-		ctx.drag_drop_ctx.state = DragAndDropState_Dragging;
+		if (!window.colapsed) {
+			ctx.drag_drop_ctx.state = DragAndDropState_Dragging;
 
-		ctx.dock_ctx.payload.docked_target = &window;
+			ctx.dock_ctx.payload.docked_target = &window;
+		}
 
 		focus_window(window);
 	}
@@ -1166,16 +1237,17 @@ void Immediate::tabsbar(Window& window) {
 	}
 
 	const auto dock_node = get_dock_node(window.dock_node_id.value());
-
 	if (!dock_node) {
 		return;
 	}
 
+	const auto root_node = get_dock_root_node(dock_node->id);
 	const auto tabsbar_widget = create_widget(std::format("{}_tabsbar", window.name), WidgetFlags_Clickable);
 	const auto& window_ids = dock_node->windows;
 	const auto active_window = dock_node->active_window;
+	const auto& host_window = ctx.id_to_window.at(root_node->host_window);
 
-	if (drag_interaction(tabsbar_widget)) {
+	if (!(host_window.flags & WindowFlags_NoMove) && drag_interaction(tabsbar_widget)) {
 		const auto root_node = get_dock_root_node(dock_node->id);
 
 		root_node->position += ctx.mouse_input.position - last_ctx.mouse_input.position;
@@ -1184,6 +1256,7 @@ void Immediate::tabsbar(Window& window) {
 		ctx.dock_ctx.payload.docked_target = root_node;
 
 		focus_window(window);
+		dock_node_skip_anims(root_node->id);
 	}
 
 	push_parent(tabsbar_widget);
@@ -1228,6 +1301,7 @@ void Immediate::tabsbar(Window& window) {
 		if (is_new(*tab_name_widget)) {
 			tab_name_widget->entity
 				.add<Node>()
+				.set(GrowDirection::Horizontal)
 				.set<ImmediateId>({ tab_name_widget->id })
 				.set<Text>(std::string(tab_window->name))
 				.set<TextFont>({
@@ -1235,6 +1309,13 @@ void Immediate::tabsbar(Window& window) {
 					.size = 24,
 				})
 				.set<TextColor>(WHITE);
+		}
+
+		if (button_interaction(tab_widget)) {
+			dock_node->next_active_window = window_id;
+
+			dock_node_skip_anims(dock_node->id);
+			focus_window(ctx.id_to_window.at(window_id));
 		}
 
 		tab_widget->entity.set<BackgroundColor>({ is_active ? Color::from_uint(40, 40, 40, 255) : Color::from_hex("#928374") });
@@ -1317,7 +1398,7 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 	constexpr auto name_format = "dockspace_options_{}";
 	const auto background_color = Color::from_uint(69, 133, 136, 180);
 	const auto border_radius = 4.f;
-	const auto size = 150.f;//std::min({ dock_node.size.x, dock_node.size.y, 150.f });
+	const auto size = std::min(150.f, std::min(docking_size.x, docking_size.y) * 0.65f);
 
 	const auto holder_widget = create_widget(std::format("dock_inner_options_holder_{}", docking_id));
 
@@ -1361,7 +1442,39 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 
 	pop_parent();
 
+	push_parent(top_mid_widget);
+
+	const auto top_mid_actual_widget = create_widget(std::format("top_mid_options_{}_actual", docking_id));
+
+	pop_parent();
+
+	push_parent(mid_left_widget);
+
+	const auto mid_left_actual_widget = create_widget(std::format("mid_left_options_{}_actual", docking_id));
+
+	pop_parent();
+
+	push_parent(mid_mid_widget);
+
+	const auto mid_mid_actual_widget = create_widget(std::format("mid_mid_options_{}_actual", docking_id));
+
+	pop_parent();
+
+	push_parent(mid_right_widget);
+
+	const auto mid_right_actual_widget = create_widget(std::format("mid_right_options_{}_actual", docking_id));
+
+	pop_parent();
+
+	push_parent(bot_mid_widget);
+
+	const auto bot_mid_actual_widget = create_widget(std::format("bot_mid_options_{}_actual", docking_id));
+
+	pop_parent();
+
 	if (is_new(*holder_widget)) {
+		const auto padding = glm::vec4(2.f);
+
 		holder_widget->entity
 			.set(GrowDirection::Horizontal)
 			.set<Transform>({
@@ -1377,43 +1490,35 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 			});
 
 		options_widget->entity
+			.add<Node>()
 			.set(SizeStrategy{
 				.x = Fixed{ size },
 				.y = Fixed{ size },
 			})
-			.set(GrowDirection::Vertical)
-			.set<Node>({
-				//.child_gap = { 4.f, 4.f },
-			});
+			.set(GrowDirection::Vertical);
 
 		top_row_widget->entity
+			.add<Node>()
 			.set(GrowDirection::Horizontal)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
-			})
-			.set<Node>({
-				//.child_gap = { 4.f, 4.f },
 			});
 
 		mid_row_widget->entity
+			.add<Node>()
 			.set(GrowDirection::Horizontal)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
-			})
-			.set<Node>({
-				//.child_gap = { 4.f, 4.f },
 			});
 
 		bot_row_widget->entity
+			.add<Node>()
 			.set(GrowDirection::Horizontal)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
-			})
-			.set<Node>({
-				//.child_gap = { 4.f, 4.f },
 			});
 
 		top_left_widget->entity
@@ -1426,13 +1531,12 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 
 		top_mid_widget->entity
 			.set(GrowDirection::Horizontal)
-			.set<BackgroundColor>(background_color)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
 			})
 			.set<Node>({
-				.border_radius = border_radius,
+				.padding = padding,
 			});
 
 		top_right_widget->entity
@@ -1446,35 +1550,32 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 
 		mid_left_widget->entity
 			.set(GrowDirection::Horizontal)
-			.set<BackgroundColor>(background_color)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
 			})
 			.set<Node>({
-				.border_radius = border_radius,
+				.padding = padding,
 			});
 
 		mid_mid_widget->entity
 			.set(GrowDirection::Horizontal)
-			.set<BackgroundColor>(background_color)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
 			})
 			.set<Node>({
-				.border_radius = border_radius,
+				.padding = padding,
 			});
 
 		mid_right_widget->entity
 			.set(GrowDirection::Horizontal)
-			.set<BackgroundColor>(background_color)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
 			})
 			.set<Node>({
-				.border_radius = border_radius,
+				.padding = padding,
 			});
 
 		bot_left_widget->entity
@@ -1487,13 +1588,12 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 
 		bot_mid_widget->entity
 			.set(GrowDirection::Horizontal)
-			.set<BackgroundColor>(background_color)
 			.set(SizeStrategy{
 				.x = Grow{},
 				.y = Grow{},
 			})
 			.set<Node>({
-				.border_radius = 4.f,
+				.padding = padding,
 			});
 
 		bot_right_widget->entity
@@ -1503,6 +1603,59 @@ void Immediate::dock_inner_options(const DockTarget& docking_target) {
 				.y = Grow{},
 			})
 			.add<Node>();
+
+		top_mid_actual_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<BackgroundColor>(background_color)
+			.set(SizeStrategy{
+				.x = Grow{},
+				.y = Grow{},
+			})
+			.set<Node>({
+				.border_radius = 4.f,
+			});
+
+		mid_left_actual_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<BackgroundColor>(background_color)
+			.set(SizeStrategy{
+				.x = Grow{},
+				.y = Grow{},
+			}) .set<Node>({
+				.border_radius = 4.f,
+			});
+
+		mid_mid_actual_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<BackgroundColor>(background_color)
+			.set(SizeStrategy{
+				.x = Grow{},
+				.y = Grow{},
+			})
+			.set<Node>({
+				.border_radius = 4.f,
+			});
+		mid_right_actual_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<BackgroundColor>(background_color)
+			.set(SizeStrategy{
+				.x = Grow{},
+				.y = Grow{},
+			})
+			.set<Node>({
+				.border_radius = 4.f,
+			});
+
+		bot_mid_actual_widget->entity
+			.set(GrowDirection::Horizontal)
+			.set<BackgroundColor>(background_color)
+			.set(SizeStrategy{
+				.x = Grow{},
+				.y = Grow{},
+			})
+			.set<Node>({
+				.border_radius = 4.f,
+			});
 	}
 
 	if (is_widget_hovered(*top_mid_widget)) {
@@ -1685,11 +1838,29 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 	});
 
 	const auto docked_aspect = se::visit(docked_target, se::visitors{
-		[](Window* window) {
-			return 0.5f;
+		[&](Window* window) {
+			auto result = 0.5f;
+
+			if (split_axis == SplitAxis_Horizontal) {
+				result = window->size.y / docking_size.y;
+			}
+			else if (split_axis == SplitAxis_Vertical) {
+				result = window->size.x / docking_size.x;
+			}
+
+			return std::min(0.5f, std::max(0.15f, result));
 		},
-		[](DockNode* node) {
-			return node->aspect_ratio;
+		[&](DockNode* node) {
+			auto result = 0.5f;
+
+			if (split_axis == SplitAxis_Horizontal) {
+				result = node->size.y / docking_size.y;
+			}
+			else if (split_axis == SplitAxis_Vertical) {
+				result = node->size.x / docking_size.x;
+			}
+
+			return std::min(0.5f, std::max(0.15f, result));
 		}
 	});
 
@@ -1706,12 +1877,12 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 		const auto side_coef = static_cast<float>(dock_side);
 
 		target_size = split_axis == SplitAxis_Horizontal
-			? glm::vec2{ docking_size.x, docking_size.y * docked_aspect }
-			: glm::vec2{ docking_size.x * docked_aspect, docking_size.y };
+			? glm::vec2{ docking_size.x, (docking_size.y - ctx.dock_ctx.node_gap) * docked_aspect }
+			: glm::vec2{ (docking_size.x - ctx.dock_ctx.node_gap) * docked_aspect, docking_size.y };
 
 		target_pos = split_axis == SplitAxis_Horizontal
-			? glm::vec2{ docking_pos.x, docking_pos.y + target_size.y * side_coef }
-			: glm::vec2{ docking_pos.x + target_size.x * side_coef, docking_pos.y };
+			? glm::vec2{ docking_pos.x, docking_pos.y + docking_size.y * side_coef - target_size.y * side_coef }
+			: glm::vec2{ docking_pos.x + docking_size.x * side_coef - target_size.x * side_coef, docking_pos.y };
 	}
 
 	const auto [edge_pos, edge_size] = [&]() -> std::pair<glm::vec2, glm::vec2> {
@@ -1734,12 +1905,10 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 		};
 	}();
 
-	constexpr auto pop_rate = 20.f;
-
-	const auto pos_x  = animation_value(std::format("dock_preview_pos_x_{}",  docking_id), edge_pos.x,  target_pos.x,  pop_rate);
-	const auto pos_y  = animation_value(std::format("dock_preview_pos_y_{}",  docking_id), edge_pos.y,  target_pos.y,  pop_rate);
-	const auto size_x = animation_value(std::format("dock_preview_size_x_{}", docking_id), edge_size.x, target_size.x, pop_rate);
-	const auto size_y = animation_value(std::format("dock_preview_size_y_{}", docking_id), edge_size.y, target_size.y, pop_rate);
+	const auto pos_x  = animation_value(std::format("dock_preview_pos_x_{}",  docking_id), edge_pos.x,  target_pos.x,  ctx.anim_pop_rate);
+	const auto pos_y  = animation_value(std::format("dock_preview_pos_y_{}",  docking_id), edge_pos.y,  target_pos.y,  ctx.anim_pop_rate);
+	const auto size_x = animation_value(std::format("dock_preview_size_x_{}", docking_id), edge_size.x, target_size.x, ctx.anim_pop_rate);
+	const auto size_y = animation_value(std::format("dock_preview_size_y_{}", docking_id), edge_size.y, target_size.y, ctx.anim_pop_rate);
 
 	if (is_new(*preview_widget)) {
 		preview_widget->entity
@@ -1759,6 +1928,7 @@ void Immediate::dock_preview(const DockTarget& docking_target, const DockTarget&
 
 Immediate::DockNode* Immediate::get_dock_node(HashId node_id) {
 	if (!ctx.dock_ctx.node_id_to_node.contains(node_id)) {
+		// print warning?
 		return nullptr;
 	}
 
@@ -1849,12 +2019,20 @@ void Immediate::dock_node_update_ratio(HashId node_id, float new_ratio) {
 	}
 }
 
+void Immediate::dock_node_skip_anims(HashId node_id) {
+	bfs(node_id, [](DockNode* node) {
+		node->skip_next_anims = true;
+	});
+}
+
 std::pair<Immediate::DockNode*, Immediate::DockNode*> Immediate::split_node(HashId node_id, SplitAxis split_axis) {
 	auto left = DockNode{
 		.id = ctx.dock_ctx.next_id++,
+		.dock_side = DockSide_TopLeft,
 	};
 	auto right = DockNode{
 		.id = ctx.dock_ctx.next_id++,
+		.dock_side = DockSide_BotRight,
 	};
 
 	auto parent = get_dock_node(node_id);
@@ -1887,37 +2065,44 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 
 			se::visit(docked_target, se::visitors{
 				[&](Window* docked_window) {
-					const auto [left_node, right_node] = split_node(node->id, split_axis);
-					const auto aspect_ratio = split_axis == SplitAxis_Horizontal
-						? docked_window->size.y / window->size.y
-						: docked_window->size.x / window->size.x;
+					if (dock_side == DockSide_Center) {
+						node->windows = { window->id, docked_window-> id};
+						node->active_window = docked_window->id;
 
-					if (dock_side == DockSide_TopLeft) {
-						left_node->windows.push_back(docked_window->id);
-						left_node->active_window = docked_window->id;
-						left_node->aspect_ratio = std::min(0.5f, aspect_ratio);
-
-						right_node->windows.push_back(window->id);
-						right_node->active_window = window->id;
-						right_node->aspect_ratio = 1.f - left_node->aspect_ratio;
-
-						docked_window->dock_node_id = left_node->id;
-						window->dock_node_id = right_node->id;
+						window->dock_node_id = node->id;
+						docked_window->dock_node_id = node->id;
 					}
 					else {
-						right_node->windows.push_back(docked_window->id);
-						right_node->active_window = docked_window->id;
-						right_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+						const auto [left_node, right_node] = split_node(node->id, split_axis);
+						const auto aspect_ratio = split_axis == SplitAxis_Horizontal
+							? docked_window->size.y / window->size.y
+							: docked_window->size.x / window->size.x;
 
-						left_node->windows.push_back(window->id);
-						left_node->active_window = window->id;
-						left_node->aspect_ratio = 1.f - right_node->aspect_ratio;
+						if (dock_side == DockSide_TopLeft) {
+							left_node->windows.push_back(docked_window->id);
+							left_node->active_window = docked_window->id;
+							left_node->aspect_ratio = std::min(0.5f, aspect_ratio);
 
-						docked_window->dock_node_id = right_node->id;
-						window->dock_node_id = left_node->id;
+							right_node->windows.push_back(window->id);
+							right_node->active_window = window->id;
+							right_node->aspect_ratio = 1.f - left_node->aspect_ratio;
+
+							docked_window->dock_node_id = left_node->id;
+							window->dock_node_id = right_node->id;
+						}
+						else {
+							right_node->windows.push_back(docked_window->id);
+							right_node->active_window = docked_window->id;
+							right_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+
+							left_node->windows.push_back(window->id);
+							left_node->active_window = window->id;
+							left_node->aspect_ratio = 1.f - right_node->aspect_ratio;
+
+							docked_window->dock_node_id = right_node->id;
+							window->dock_node_id = left_node->id;
+						}
 					}
-
-					ctx.dock_ctx.fresh_docks.emplace(docked_window->dock_node_id.value());
 				},
 				[&](DockNode* docked_node) {
 					const auto docking_node = create_dock_child(node, dock_side == DockSide_TopLeft ? DockSide_BotRight : DockSide_TopLeft);
@@ -1947,12 +2132,6 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 						node->active_window = window->id;
 
 						window->dock_node_id = node->id;
-
-						if (node->dockspace) {
-							const auto window_widget = get_widget_by_id(window->id);
-
-							window_widget->entity.get_ref<Node>()->absolute = false;
-						}
 					}
 					else {
 						const auto node_windows       = node->windows;
@@ -2034,25 +2213,45 @@ void Immediate::apply_dock(const DockTarget& docking_target, const DockTarget& d
 							}
 						}
 					}
-
-					ctx.dock_ctx.fresh_docks.emplace(window->dock_node_id.value());
 				},
 				[&](DockNode* docked_node) {
-					const auto root = create_dock_root(node->position, node->size);
-					const auto docked_index = dock_side == DockSide_TopLeft ? 0 : 1;
-					const auto aspect_ratio = split_axis == SplitAxis_Horizontal
-						? docked_node->size.y / node->size.y
-						: docked_node->size.x / node->size.x;
+					if (dock_side == DockSide_Center) {
+						node->windows.append_range(docked_node->windows);
+						node->active_window = docked_node->active_window;
 
-					root->split_axis                 = split_axis;
-					root->children[    docked_index] = docked_node->id;
-					root->children[1 - docked_index] = node->id;
+						for (const auto window_id : docked_node->windows) {
+							auto& window = ctx.id_to_window.at(window_id);
 
-					docked_node->parent_id    = root->id;
-					docked_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+							window.dock_node_id = node->id;
+						}
 
-					node->parent_id    = root->id;
-					node->aspect_ratio = 1.f - docked_node->aspect_ratio;
+						docked_node->windows.clear();
+						docked_node->active_window = 0;
+					}
+					else {
+						const auto other_child = create_dock_child(node, dock_side == DockSide_TopLeft ? DockSide_BotRight : DockSide_TopLeft);
+
+						const auto docked_index = dock_side == DockSide_TopLeft ? 0 : 1;
+						const auto aspect_ratio = split_axis == SplitAxis_Horizontal
+							? docked_node->size.y / node->size.y
+							: docked_node->size.x / node->size.x;
+
+						node->split_axis                 = split_axis;
+						node->children[    docked_index] = docked_node->id;
+						node->children[1 - docked_index] = other_child->id;
+
+						docked_node->parent_id    = node->id;
+						docked_node->aspect_ratio = std::min(0.5f, aspect_ratio);
+
+						other_child->aspect_ratio = 1.f - docked_node->aspect_ratio;
+
+						if (node->central_node) {
+							other_child->central_node = true;
+							node->central_node = false;
+
+							get_dock_root_node(node->id)->central_node_id = other_child->id;
+						}
+					}
 				}
 			});
 		}
@@ -2067,19 +2266,18 @@ void Immediate::undock_window(Window& window) {
 	auto dock_node = get_dock_node(window.dock_node_id.value());
 
 	window.dock_node_id.reset();
-	get_widget_by_id(window.id)->entity.get_ref<Node>()->absolute = true;
 
 	if (!dock_node) {
 		return;
 	}
 
-	auto window_it = std::ranges::find(dock_node->windows, window.id);
+	std::erase(dock_node->windows, window.id);
 
-	if (window_it != dock_node->windows.end()) {
-		dock_node->windows.erase(window_it);
+	if (dock_node->active_window == window.id) {
+		dock_node->active_window = 0;
 	}
 
-	if (!dock_node->windows.empty() && dock_node->active_window == window.id) {
+	if (!dock_node->windows.empty()) {
 		dock_node->active_window = dock_node->windows.back();
 	}
 }
@@ -2095,13 +2293,7 @@ void Immediate::update_dock_nodes() {
 			if (node->parent_id != 0 && node->root) {
 				roots_to_delete.push_back(node->id);
 
-				return;
-			}
-
-			if (!static_cast<bool>(ctx.id_to_window.at(root->host_window).flags & WindowFlags_FixedFocus)) {
-				for (const auto window_id : node->windows) {
-					root->focus_order = std::max(root->focus_order, ctx.id_to_window.at(window_id).focus_order);
-				}
+				node->root = false;
 			}
 
 			const auto leaf_node = node->children[0] == 0;
@@ -2121,6 +2313,11 @@ void Immediate::update_dock_nodes() {
 						ctx.id_to_window.at(window).disabled = true;
 					}
 
+					if (node->next_active_window != 0) {
+						node->active_window = node->next_active_window;
+						node->next_active_window = 0;
+					}
+
 					ctx.id_to_window.at(node->active_window).disabled = false;
 				}
 			}
@@ -2133,7 +2330,7 @@ void Immediate::update_dock_nodes() {
 					const auto multiplier = static_cast<float>(i);
 					const auto child = get_dock_node(child_id);
 
-					child->position = node->root ? glm::vec2(0.f) : node->position;
+					child->position = node->position;
 
 					if (node->split_axis == SplitAxis_Horizontal) {
 						child->size.x = node->size.x;
@@ -2164,9 +2361,18 @@ void Immediate::update_dock_nodes() {
 			if (parent->children[0] == node->id) {
 				const auto other_child = get_dock_node(parent->children[1]);
 
-				parent->split_axis = SplitAxis_None;
+				parent->split_axis = other_child->split_axis;
 				parent->windows = other_child->windows;
 				parent->active_window = other_child->active_window;
+				parent->children = other_child->children;
+
+				for (const auto child_id : other_child->children) {
+					if (child_id == 0) {
+						continue;
+					}
+
+					get_dock_node(child_id)->parent_id = parent->id;
+				}
 
 				if (other_child->central_node) {
 					parent->central_node = other_child->central_node;
@@ -2178,9 +2384,18 @@ void Immediate::update_dock_nodes() {
 			else {
 				const auto other_child = get_dock_node(parent->children[0]);
 
-				parent->split_axis = SplitAxis_None;
+				parent->split_axis = other_child->split_axis;
 				parent->windows = other_child->windows;
 				parent->active_window = other_child->active_window;
+				parent->children = other_child->children;
+
+				for (const auto child_id : other_child->children) {
+					if (child_id == 0) {
+						continue;
+					}
+
+					get_dock_node(child_id)->parent_id = parent->id;
+				}
 
 				if (other_child->central_node) {
 					parent->central_node = other_child->central_node;
@@ -2190,14 +2405,29 @@ void Immediate::update_dock_nodes() {
 				ctx.dock_ctx.node_id_to_node.erase(other_child->id);
 			}
 
-			for (const auto window_id : parent->windows) {
-				if (ctx.id_to_window.contains(window_id)) {
-					ctx.id_to_window.at(window_id).dock_node_id = parent->id;
+			if (parent->parent_id == 0 && !parent->dockspace && parent->windows.size() < 2) {
+				for (const auto window_id : parent->windows) {
+					if (ctx.id_to_window.contains(window_id)) {
+						auto& window = ctx.id_to_window.at(window_id);
+
+						window.dock_node_id.reset();
+						window.disabled = false;
+					}
+				}
+
+				if (parent->root) {
+					roots_to_delete.push_back(parent->id);
+				}
+
+				ctx.dock_ctx.node_id_to_node.erase(parent->id);
+			}
+			else {
+				for (const auto window_id : parent->windows) {
+					if (ctx.id_to_window.contains(window_id)) {
+						ctx.id_to_window.at(window_id).dock_node_id = parent->id;
+					}
 				}
 			}
-
-			parent->children[0] = 0;
-			parent->children[1] = 0;
 		}
 		else {
 			for (const auto window_id : node->windows) {
@@ -2207,6 +2437,10 @@ void Immediate::update_dock_nodes() {
 					window.dock_node_id.reset();
 					window.disabled = false;
 				}
+			}
+
+			if (node->root) {
+				roots_to_delete.push_back(node->id);
 			}
 		}
 
@@ -2245,24 +2479,16 @@ void Immediate::focus_window(Window& window) {
 		--ctx.windows_focus_order[i]->focus_order;
 	}
 
-	for (auto [_, window] : ctx.id_to_window) {
-		auto& widget = ctx.id_to_widget[window.id];
-		auto& border_color = widget.entity.ensure<BorderColor>();
-		auto& node = widget.entity.ensure<Node>();
-
-		border_color = Color::from_hex("#504945");
+	for (auto& [_, window] : ctx.id_to_window) {
+		if (window.disabled) {
+			continue;
+		}
 
 		window.has_focus = false;
 	}
 
 	window.focus_order = ctx.id_to_window.size() - 1;
 	window.has_focus = true;
-
-	auto& widget = ctx.id_to_widget[window.id];
-	auto& border_color = widget.entity.ensure<BorderColor>();
-	auto& node = widget.entity.ensure<Node>();
-
-	border_color = Color::from_hex("#d65d0e");
 }
 
 void Immediate::grip_window_borders(Window& window) {
@@ -2325,13 +2551,15 @@ void Immediate::grip_window_borders(Window& window) {
 	pop_parent();
 }
 void Immediate::grip_dock_borders(DockNode& dock_node) {
-	if (dock_node.split_axis == SplitAxis_None) {
+	if (dock_node.split_axis == SplitAxis_None && dock_node.windows.empty()) {
 		return;
 	}
 
 	push_parent(dock_node.overlay_widget_id);
 
-	const auto& host_window = ctx.id_to_window[dock_node.host_window];
+	const auto& host_window = dock_node.windows.size() > 1
+		? ctx.id_to_window[dock_node.active_window]
+		: ctx.id_to_window[dock_node.host_window];
 
 	if (!static_cast<bool>(host_window.flags & WindowFlags_NoResize)) {
 		for (int dir = 0; dir < 4; ++dir) {
@@ -2377,6 +2605,8 @@ void Immediate::grip_dock_borders(DockNode& dock_node) {
 					dock_node.position.y += delta.y * (dir == 1 ? 1.f : 0.f);
 					dock_node.size.y += delta.y * (dir == 1 ? -1.f : 1.f);
 				}
+
+				dock_node_skip_anims(dock_node.id);
 			}
 			else if (hover_interaction(grip_widget)) {
 				color = Color::from_hex("#d5c4a1");
@@ -2410,28 +2640,29 @@ void Immediate::grip_dock_borders(DockNode& dock_node) {
 		auto& size       = grip_widget->entity.ensure<SizeStrategy>();
 
 		if (node->split_axis == SplitAxis_Horizontal) {
-			transform.translation.y = (node->root ? 0.f : node->position.y) + (node->size.y - ctx.dock_ctx.node_gap) * child->aspect_ratio;
-			transform.translation.x = node->root ? 0.f : node->position.x;
+			transform.translation.y = node->position.y - dock_node.position.y + (node->size.y - ctx.dock_ctx.node_gap) * child->aspect_ratio;
+			transform.translation.x = node->position.x - dock_node.position.x;
 			size.x = Fixed{ node->size.x };
 			size.y = Fixed{ ctx.dock_ctx.node_gap * 2.f };
 		}
 		else {
-			transform.translation.x = (node->root ? 0.f : node->position.x) + (node->size.x - ctx.dock_ctx.node_gap) * child->aspect_ratio;
-			transform.translation.y = node->root ? 0.f : node->position.y;
+			transform.translation.x = node->position.x - dock_node.position.x + (node->size.x - ctx.dock_ctx.node_gap) * child->aspect_ratio;
+			transform.translation.y = node->position.y - dock_node.position.y;
 			size.x = Fixed{ ctx.dock_ctx.node_gap * 2.f };
 			size.y = Fixed{ node->size.y };
 		}
 
 		if (drag_interaction(grip_widget)) {
 			const auto ratio = node->split_axis == SplitAxis_Horizontal
-				? std::min(std::max(ctx.mouse_input.position.y - (dock_node.position.y + (node->root ? 0.f : node->position.y)), 0.f), node->size.y) / node->size.y
-				: std::min(std::max(ctx.mouse_input.position.x - (dock_node.position.x + (node->root ? 0.f : node->position.x)), 0.f), node->size.x) / node->size.x;
+				? std::min(std::max(ctx.mouse_input.position.y - node->position.y, 0.f), node->size.y) / node->size.y
+				: std::min(std::max(ctx.mouse_input.position.x - node->position.x, 0.f), node->size.x) / node->size.x;
 
 			color = Color::from_hex("#fbf1c7");
 
 			ctx.cursor_type = node->split_axis == SplitAxis_Horizontal ? SDL_SYSTEM_CURSOR_NS_RESIZE : SDL_SYSTEM_CURSOR_EW_RESIZE;
 
 			dock_node_update_ratio(child->id, ratio);
+			dock_node_skip_anims(node->id);
 		}
 		else if (hover_interaction(grip_widget)) {
 			color = Color::from_hex("#d5c4a1");
